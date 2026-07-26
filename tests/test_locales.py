@@ -102,6 +102,31 @@ def test_state_label_translates_known_codes_and_keeps_unknown_codes():
     assert locales.state_label('未知狀態') == '未知狀態'
 
 
+def test_recognition_quality_and_no_speech_copy_is_complete():
+    required = {
+        'recognition_quality_setting',
+        'recognition_quality_quality',
+        'recognition_quality_balanced',
+        'recognition_quality_fast',
+        'recognition_quality_desc',
+        'subtitle_no_speech',
+        'subtitle_empty_result',
+    }
+    for lang in LANGS:
+        strings = locales.STRINGS[lang]
+        assert required <= strings.keys()
+        assert 'large-v3-turbo' in strings['recognition_quality_desc']
+        assert '574' in strings['recognition_quality_desc']
+        assert '190' in strings['recognition_quality_desc']
+        assert '60' in strings['recognition_quality_desc']
+        assert '147' in strings['translation_provider_hint']
+        assert '147' in strings['subtitle_desc']
+
+    locales.set_lang('zh')
+    assert locales.T('subtitle_no_speech') == '未偵測到日語語音'
+    assert locales.state_label('未偵測到日語語音') == '未偵測到日語語音'
+
+
 def test_site_language_codes():
     expected = {
         'en': ('en', ''),

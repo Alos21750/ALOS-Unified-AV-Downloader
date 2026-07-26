@@ -635,6 +635,36 @@ def test_translate_srt_preserves_timestamps(monkeypatch, tmp_path):
         cue.timing for cue in source_cues]
 
 
+def test_translate_srt_accepts_bom_marked_utf16_source(
+        monkeypatch, tmp_path):
+    source = tmp_path / 'video.ja.srt'
+    destination = tmp_path / 'video.zh-TW.srt'
+    source.write_text(_sample_srt('Japanese source'), encoding='utf-16')
+    monkeypatch.setattr(
+        subtitles, 'translate_cues',
+        lambda texts, *_args, **_kwargs:
+            [f'Translated {text}' for text in texts])
+
+    subtitles.translate_srt_to_zh_tw(str(source), str(destination))
+
+    assert subtitles._existing(str(source))
+    cues = subtitles.parse_srt(destination.read_text(encoding='utf-8'))
+    assert [cue.text for cue in cues] == ['Translated Japanese source']
+
+
+def test_translate_srt_rejects_empty_source_without_creating_sidecar(tmp_path):
+    source = tmp_path / 'video.ja.srt'
+    destination = tmp_path / 'video.zh-TW.srt'
+    source.write_text('', encoding='utf-8')
+
+    with pytest.raises(
+            subtitles.SubtitleError,
+            match='does not contain any cues'):
+        subtitles.translate_srt_to_zh_tw(str(source), str(destination))
+
+    assert not destination.exists()
+
+
 def test_generate_all_creates_three_selectable_sidecars(monkeypatch, tmp_path):
     video = tmp_path / 'movie.mp4'
     video.write_bytes(b'video')
@@ -690,7 +720,8 @@ def test_generate_all_creates_three_selectable_sidecars(monkeypatch, tmp_path):
     assert stages[-1] == ('done', 100)
 
 
-def test_chinese_failure_preserves_japanese_fallback(monkeypatch, tmp_path):
+def test_chinese_failure_does_not_leave_unrequested_japanese(
+        monkeypatch, tmp_path):
     video = tmp_path / 'movie.mp4'
     video.write_bytes(b'video')
     monkeypatch.setattr(
@@ -712,7 +743,7 @@ def test_chinese_failure_preserves_japanese_fallback(monkeypatch, tmp_path):
 
     with pytest.raises(subtitles.SubtitleError):
         subtitles.generate_subtitles(str(video), 'zh')
-    assert (tmp_path / 'movie.ja.srt').is_file()
+    assert not (tmp_path / 'movie.ja.srt').exists()
     assert not (tmp_path / 'movie.zh-TW.srt').exists()
 
 

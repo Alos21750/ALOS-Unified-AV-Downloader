@@ -178,6 +178,27 @@ def test_config_subtitle_mode_round_trip_and_validation(tmp_path, monkeypatch):
         assert json.load(handle)['subtitle_mode'] == 'none'
 
 
+def test_recognition_quality_defaults_normalizes_and_shares_ui_prefs(
+        tmp_path, monkeypatch):
+    path = tmp_path / 'ui_prefs.json'
+    monkeypatch.setattr(config, '_ui_prefs_path', lambda: str(path))
+
+    assert config.get_recognition_quality() == 'quality'
+    assert config.set_recognition_quality('small') == 'balanced'
+    assert config.get_recognition_quality() == 'balanced'
+
+    config.set_theme('dark')
+    assert config.set_recognition_quality('fast') == 'fast'
+    stored = json.loads(path.read_text(encoding='utf-8'))
+    assert stored == {
+        'recognition_quality': 'fast',
+        'theme': 'dark',
+    }
+
+    assert config.set_recognition_quality('unknown') == 'quality'
+    assert config.get_recognition_quality() == 'quality'
+
+
 def test_download_concurrency_round_trip_clamps_and_preserves_preferences(
         tmp_path, monkeypatch):
     path = tmp_path / 'ui_prefs.json'

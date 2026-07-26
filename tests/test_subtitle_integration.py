@@ -12,6 +12,7 @@ import pytest
 
 import gui_modern
 import jable_smalltool
+import locales
 from subtitle_engine import SubtitleResult
 
 
@@ -57,6 +58,9 @@ def test_llm_diagnostic_exits_both_entry_points_before_gui_import(
 
     def fake_run(output):
         calls.append(output)
+        Path(output).write_text(
+            '{"kind":"llm-diagnostic","schema":1}',
+            encoding='utf-8')
 
     fake_engine.run_llm_translation_diagnostic = fake_run
     fake_engine.run_local_translation_diagnostic = lambda _output: None
@@ -170,6 +174,55 @@ def test_modern_keeps_video_and_surfaces_subtitle_failure(monkeypatch, tmp_path)
     assert item.state == '已下載'
     assert 'offline' in item.error
     assert os.path.isfile(video)
+
+
+def test_modern_no_speech_is_a_non_error_terminal_result(monkeypatch, tmp_path):
+    video = tmp_path / 'silent.mp4'
+    video.write_bytes(b'video')
+    monkeypatch.setattr(
+        gui_modern.M3U8Sites, 'CreateSite',
+        lambda _url, _dest: FakeDownloadJob(video))
+    monkeypatch.setattr(
+        gui_modern, 'generate_subtitles',
+        lambda *_args, **_kwargs: SubtitleResult((), (), no_speech=True))
+    manager = gui_modern.DownloadManager(subtitle_mode_getter=lambda: 'ja')
+    manager.add_item('https://jable.tv/videos/silent/', state='等待中')
+
+    manager._run(
+        'https://jable.tv/videos/silent/', str(tmp_path), epoch=0)
+
+    assert _wait_until(
+        lambda: manager.subtitle_active_count == 0
+        and manager.subtitle_pending_count == 0)
+    item = manager.get_items()[0]
+    assert item.state == '未偵測到日語語音'
+    assert item.progress == 100
+    assert item.error == ''
+
+
+def test_modern_empty_subtitle_result_is_not_silent_success(
+        monkeypatch, tmp_path):
+    video = tmp_path / 'empty.mp4'
+    video.write_bytes(b'video')
+    monkeypatch.setattr(
+        gui_modern.M3U8Sites, 'CreateSite',
+        lambda _url, _dest: FakeDownloadJob(video))
+    monkeypatch.setattr(
+        gui_modern, 'generate_subtitles',
+        lambda *_args, **_kwargs: SubtitleResult((), ()))
+    manager = gui_modern.DownloadManager(subtitle_mode_getter=lambda: 'ja')
+    manager.add_item('https://jable.tv/videos/empty/', state='等待中')
+
+    manager._run(
+        'https://jable.tv/videos/empty/', str(tmp_path), epoch=0)
+
+    assert _wait_until(
+        lambda: manager.subtitle_active_count == 0
+        and manager.subtitle_pending_count == 0)
+    item = manager.get_items()[0]
+    assert item.state == '未完成'
+    assert item.error
+    assert locales.T('subtitle_empty_result') in item.error
 
 
 def test_modern_download_slot_is_released_while_subtitles_run(
@@ -319,7 +372,7 @@ def test_modern_subtitle_queue_is_serial_and_dedupes_inflight_urls(
         if first:
             first_subtitle_started.set()
             assert release_subtitle.wait(3)
-        return SubtitleResult((), ())
+        return SubtitleResult((path + '.ja.srt',), ())
 
     monkeypatch.setattr(gui_modern, 'generate_subtitles', serial_subtitles)
     manager = gui_modern.DownloadManager(
@@ -533,6 +586,65 @@ def test_smalltool_runs_subtitles_before_marking_seen(monkeypatch, tmp_path):
     assert calls == [(str(video_path), 'zh')]
     assert marked == [('https://missav.ai/sample', 'sample')]
     assert worker.get_progress() is None
+
+
+def test_smalltool_no_speech_is_logged_and_marked_seen(monkeypatch, tmp_path):
+    video_path = tmp_path / 'silent.mp4'
+    video_path.write_bytes(b'video')
+    monkeypatch.setattr(jable_smalltool, 'load_seen', lambda: {})
+    monkeypatch.setattr(
+        jable_smalltool.M3U8Sites, 'CreateSite',
+        lambda _url, _dest: FakeDownloadJob(video_path))
+    monkeypatch.setattr(
+        jable_smalltool, 'generate_subtitles',
+        lambda *_args, **_kwargs: SubtitleResult((), (), no_speech=True))
+    logs = []
+    worker = jable_smalltool.SmallToolWorker(logs.append)
+    worker._subtitle_mode = 'ja'
+    marked = []
+    worker._mark_seen = lambda url, title, **kwargs: marked.append((url, title))
+    sample = {
+        'url': 'https://missav.ai/silent',
+        'title': 'silent',
+        '_site': 'MissAV',
+    }
+
+    result = worker._download_one(sample, str(tmp_path))
+
+    assert result is None
+    assert any(locales.T('subtitle_no_speech') in line for line in logs)
+    assert not any('[SUBTITLE-ERR]' in line for line in logs)
+    assert marked == [('https://missav.ai/silent', 'silent')]
+
+
+def test_smalltool_empty_subtitle_result_retries_without_marking_seen(
+        monkeypatch, tmp_path):
+    video_path = tmp_path / 'empty.mp4'
+    video_path.write_bytes(b'video')
+    monkeypatch.setattr(jable_smalltool, 'load_seen', lambda: {})
+    monkeypatch.setattr(
+        jable_smalltool.M3U8Sites, 'CreateSite',
+        lambda _url, _dest: FakeDownloadJob(video_path))
+    monkeypatch.setattr(
+        jable_smalltool, 'generate_subtitles',
+        lambda *_args, **_kwargs: SubtitleResult((), ()))
+    logs = []
+    worker = jable_smalltool.SmallToolWorker(logs.append)
+    worker._subtitle_mode = 'ja'
+    marked = []
+    worker._mark_seen = lambda *args, **kwargs: marked.append(args)
+
+    result = worker._download_one(
+        {
+            'url': 'https://missav.ai/empty',
+            'title': 'empty',
+            '_site': 'MissAV',
+        },
+        str(tmp_path))
+
+    assert result == 'subtitle_failed'
+    assert marked == []
+    assert any(locales.T('subtitle_empty_result') in line for line in logs)
 
 
 def test_smalltool_retries_when_subtitle_generation_fails(monkeypatch, tmp_path):

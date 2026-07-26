@@ -37,18 +37,79 @@ except Exception:
 
 
 def _run_translation_diagnostic_if_requested():
+    whisper_input = _os.environ.get(
+        'JABLE_WHISPER_DIAGNOSTIC_INPUT')
+    whisper_output = _os.environ.get(
+        'JABLE_WHISPER_DIAGNOSTIC_OUTPUT')
+    if whisper_input is not None or whisper_output is not None:
+        if not (whisper_input and whisper_input.strip()
+                and whisper_output and whisper_output.strip()):
+            raise SystemExit(2)
+        try:
+            input_path = _os.path.abspath(whisper_input)
+            output_path = _os.path.abspath(whisper_output)
+            if _os.path.normcase(input_path) == _os.path.normcase(output_path):
+                raise ValueError('diagnostic input and output must differ')
+            if not _os.path.isfile(input_path):
+                raise FileNotFoundError('diagnostic input is not a file')
+            if (_os.path.isdir(output_path)
+                    or not _os.path.isdir(_os.path.dirname(output_path))):
+                raise FileNotFoundError(
+                    'diagnostic output directory is unavailable')
+            try:
+                _os.remove(output_path)
+            except FileNotFoundError:
+                pass
+            from subtitle_engine import run_whisper_diagnostic
+            run_whisper_diagnostic(input_path, output_path)
+            if not _os.path.isfile(output_path):
+                raise RuntimeError('diagnostic did not produce its report')
+        except (Exception, SystemExit):
+            # Frozen verification is machine-consumed.  Keep failures
+            # deterministic and never echo media paths, transcripts, or keys.
+            raise SystemExit(2) from None
+        raise SystemExit(0)
+
     local_output = _os.environ.get(
         'JABLE_LOCAL_TRANSLATION_DIAGNOSTIC_OUTPUT', '')
     if local_output:
-        from subtitle_engine import run_local_translation_diagnostic
-        run_local_translation_diagnostic(local_output)
+        try:
+            output_path = _os.path.abspath(local_output.strip())
+            if (_os.path.isdir(output_path)
+                    or not _os.path.isdir(_os.path.dirname(output_path))):
+                raise FileNotFoundError(
+                    'diagnostic output directory is unavailable')
+            try:
+                _os.remove(output_path)
+            except FileNotFoundError:
+                pass
+            from subtitle_engine import run_local_translation_diagnostic
+            run_local_translation_diagnostic(output_path)
+            if not _os.path.isfile(output_path):
+                raise RuntimeError('diagnostic did not produce its report')
+        except (Exception, SystemExit):
+            raise SystemExit(2) from None
         raise SystemExit(0)
 
     llm_output = _os.environ.get(
         'JABLE_LLM_TRANSLATION_DIAGNOSTIC_OUTPUT', '')
     if llm_output:
-        from subtitle_engine import run_llm_translation_diagnostic
-        run_llm_translation_diagnostic(llm_output)
+        try:
+            output_path = _os.path.abspath(llm_output.strip())
+            if (_os.path.isdir(output_path)
+                    or not _os.path.isdir(_os.path.dirname(output_path))):
+                raise FileNotFoundError(
+                    'diagnostic output directory is unavailable')
+            try:
+                _os.remove(output_path)
+            except FileNotFoundError:
+                pass
+            from subtitle_engine import run_llm_translation_diagnostic
+            run_llm_translation_diagnostic(output_path)
+            if not _os.path.isfile(output_path):
+                raise RuntimeError('diagnostic did not produce its report')
+        except (Exception, SystemExit):
+            raise SystemExit(2) from None
         raise SystemExit(0)
 
 

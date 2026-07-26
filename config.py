@@ -25,6 +25,7 @@ _system_proxy_cache = _PROXY_UNSET
 CF_OVERRIDES = {}
 VALID_RESOLUTION_PREFS = {'highest', 'lowest', '1080', '720', '480', '360'}
 VALID_SUBTITLE_PREFS = {'none', 'ja', 'en', 'zh', 'all'}
+VALID_RECOGNITION_QUALITIES = {'quality', 'balanced', 'fast'}
 DEFAULT_DOWNLOAD_CONCURRENCY = 2
 MIN_DOWNLOAD_CONCURRENCY = 1
 MAX_DOWNLOAD_CONCURRENCY = 32
@@ -158,6 +159,52 @@ def set_subtitle_pref(pref):
             _save_prefs(prefs)
     except Exception:
         pass
+
+
+def _normalize_recognition_quality(value):
+    quality = str(value or '').strip().lower().replace('_', '-')
+    aliases = {
+        '': 'quality',
+        'default': 'quality',
+        'precise': 'quality',
+        'precision': 'quality',
+        'accurate': 'quality',
+        'accuracy': 'quality',
+        'high': 'quality',
+        'best': 'quality',
+        'large': 'quality',
+        'large-v3-turbo': 'quality',
+        'medium': 'balanced',
+        'normal': 'balanced',
+        'small': 'balanced',
+        'speed': 'fast',
+        'quick': 'fast',
+        'base': 'fast',
+        'legacy': 'fast',
+    }
+    quality = aliases.get(quality, quality)
+    if quality in VALID_RECOGNITION_QUALITIES:
+        return quality
+    return 'quality'
+
+
+def get_recognition_quality():
+    """Return the shared local speech-recognition quality preference."""
+    return _normalize_recognition_quality(
+        _load_prefs().get('recognition_quality'))
+
+
+def set_recognition_quality(value):
+    """Persist a normalized speech-recognition quality for both GUIs."""
+    quality = _normalize_recognition_quality(value)
+    try:
+        with _prefs_lock:
+            prefs = _load_prefs()
+            prefs['recognition_quality'] = quality
+            _save_prefs(prefs)
+    except Exception:
+        pass
+    return quality
 
 
 def _normalize_download_concurrency(value):

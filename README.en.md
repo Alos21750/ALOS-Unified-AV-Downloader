@@ -30,7 +30,7 @@
 > **Fully local by default, with no API key and no uploads.** After a download, Modern and SmallTool can create selectable `.ja.srt`, `.en.srt`, and `.zh-TW.srt` sidecars without modifying the MP4. You can optionally connect a common LLM API; recognized subtitle text is then the only media-derived content sent, alongside required API authentication and ordinary connection metadata—never video or audio.
 
 <p align="center">
-  <img src="./img/readme_modern.png" width="100%" alt="JableTV Downloader Modern v2.5.34 English dark interface with JableTV, MissAV and SupJav browse tabs" />
+  <img src="./img/readme_modern.png" width="100%" alt="JableTV Downloader Modern v2.5.35 English dark interface with JableTV, MissAV and SupJav browse tabs" />
 </p>
 
 ## Pick the right tool
@@ -71,7 +71,7 @@ If Windows SmartScreen appears, first verify that the file came from this projec
 ## SmallTool: monitor categories automatically
 
 <p align="center">
-  <img src="./img/readme_smalltool.png" width="100%" alt="Jable SmallTool v2.5.34 Traditional Chinese dark interface showing MissAV categories, date, quality, version priority, and AI subtitles" />
+  <img src="./img/readme_smalltool.png" width="100%" alt="Jable SmallTool v2.5.35 Traditional Chinese dark interface showing MissAV categories, date, quality, version priority, and AI subtitles" />
 </p>
 
 1. Choose a destination. If left unset, SmallTool creates `tmp` beside the executable.
@@ -92,8 +92,10 @@ State is stored in `.Jable_smalltool` beside the executable when writable, other
 
 ## AI subtitles: download first, get selectable Japanese, English, and Traditional Chinese SRTs
 
-- Both Windows GUIs offer **Off / Japanese / English / Traditional Chinese / all three** before download. When the video finishes, they automatically create `.ja.srt`, `.en.srt`, and `.zh-TW.srt` beside it without modifying the MP4. Subtitle translation defaults to the local mode, which requires no API key.
-- Japanese transcription runs locally with the official [whisper.cpp](https://github.com/ggml-org/whisper.cpp). First use downloads and SHA-256-verifies the approximately 60 MB multilingual [base-q5_1 model](https://huggingface.co/ggerganov/whisper.cpp/blob/main/ggml-base-q5_1.bin) plus the [official Silero VAD](https://huggingface.co/ggml-org/whisper-vad/tree/main). The current source-language assumption is Japanese audio, and VAD skips non-speech regions.
+- Both Windows GUIs offer **Off / Japanese / English / Traditional Chinese / all three** before download. When a video finishes, the app creates only the selected `.ja.srt`, `.en.srt`, and/or `.zh-TW.srt` sidecars without modifying the MP4. If only English or Chinese is requested and translation fails, no unrequested Japanese sidecar is left behind. Subtitle translation defaults to the local mode, which requires no API key.
+- Japanese transcription stays local and uses pinned releases of the official [whisper.cpp](https://github.com/ggml-org/whisper.cpp) and [official Silero VAD](https://huggingface.co/ggml-org/whisper-vad/tree/main). Three SHA-256-verified speech profiles download lazily only when selected: **Accurate (default), large-v3-turbo q5, ~574 MB**; **Balanced, small q5, ~190 MB**; and **Fast, base q5, ~60 MB**.
+- External VAD is used only as a speech gate. Transcription runs on context-rich, non-overlapping windows that retain the original silence, then remaps cues to absolute video time. Decoding uses beam search, best-of candidates, and temperature fallback for stronger recognition and a stable timeline.
+- The app records the recognition profile and pipeline provenance of subtitles it generates. A change to either retriggers app-generated recognition and derived translations, while pre-existing SRT files without provenance and user-edited SRT files are preserved unchanged.
 - Local English and Taiwan Traditional Chinese translation uses pinned, SHA-256-verified [FuguMT](https://huggingface.co/staka/fugumt-ja-en) and [OPUS-MT](https://huggingface.co/Helsinki-NLP/opus-mt-en-zh) INT8 models. It does not use Google or another free network translation endpoint. The approximately **147 MB** local translation pack is downloaded only when an English, Traditional Chinese, or all-three subtitle job actually starts. Off and Japanese-only jobs do not download it, and an LLM API job does not need it. Once downloaded, the pack can be reused offline.
 - Optional API extensions support the **OpenAI, Anthropic, Gemini**, and **OpenAI-compatible** APIs. The compatible option can connect to services such as DeepSeek, OpenRouter, Groq, Ollama, and LiteLLM. Recognized subtitle text is the only media-derived content sent to the selected service; required API authentication and ordinary connection metadata are also sent, while video and audio always remain local.
 - User-supplied API keys are encrypted with Windows DPAPI for the current signed-in Windows account. No API key is bundled with the project or either EXE. Pricing, quotas, data handling, and acceptable-use policies depend on the chosen provider; check that provider's current terms before use.

@@ -34,6 +34,7 @@ from locales import T, set_lang, get_lang, ui_font, LANGUAGES, state_label
 from subtitle_engine import (
     SubtitleCancelled,
     generate_subtitles,
+    normalize_recognition_quality,
     normalize_subtitle_mode,
 )
 from translation_settings_ui import (
@@ -50,7 +51,7 @@ from ui_theme import (
     browse_columns_for_width,
 )
 
-APP_VERSION = '2.5.34'
+APP_VERSION = '2.5.35'
 
 # issue #24: startup breadcrumbs — no-op if crashlog unavailable
 try:
@@ -85,6 +86,7 @@ _STATE_PRIORITY = {
     '未完成': 6,
     '封鎖/解析失敗': 7,
     '網址錯誤': 8,
+    '未偵測到日語語音': 9,
     '已下載': 9,
     '已取消': 10,
 }
@@ -109,7 +111,7 @@ def _visible_window(items, cap):
 
 
 def _select_persist(items, cap):
-    terminal = {'已下載', '已取消', '網址錯誤'}
+    terminal = {'已下載', '未偵測到日語語音', '已取消', '網址錯誤'}
     resumable = [i for i in items if i.state not in terminal]
     terminal_items = [i for i in items if i.state in terminal]
     budget = max(0, cap - len(resumable))
@@ -392,6 +394,7 @@ class DownloadManager:
     def _run_subtitle(self, task: _DownloadTask):
         job = task.job
         warning = ''
+        completion_state = '已下載'
 
         def _subtitle_progress(stage, percent):
             state = _SUBTITLE_STATE_BY_STAGE.get(stage)
@@ -403,12 +406,18 @@ class DownloadManager:
         try:
             if self._context_cancelled(task):
                 raise SubtitleCancelled()
-            generate_subtitles(
+            subtitle_result = generate_subtitles(
                 job._get_video_savename(), task.subtitle_mode,
                 progress_callback=_subtitle_progress,
                 cancel_check=lambda: (
                     self._context_cancelled(task) or bool(job._cancel_job)),
             )
+            if subtitle_result.no_speech:
+                completion_state = '未偵測到日語語音'
+            elif not subtitle_result.files:
+                completion_state = '未完成'
+                warning = T(
+                    'subtitle_failed', error=T('subtitle_empty_result'))
         except SubtitleCancelled:
             task.cancelled.set()
         except Exception as exc:
@@ -421,7 +430,7 @@ class DownloadManager:
             self._complete_subtitle(task, '已取消')
         else:
             self._complete_subtitle(
-                task, '已下載', progress=100,
+                task, completion_state, progress=100,
                 error=warning if warning else None)
 
     def _start_download_thread(self, task: _DownloadTask):
@@ -1247,6 +1256,30 @@ class ModernApp(ctk.CTk):
             'all': T('subtitle_all'),
         }.get(config.get_subtitle_pref(), T('subtitle_none'))
 
+    def _recognition_quality_values(self):
+        return [
+            T('recognition_quality_quality'),
+            T('recognition_quality_balanced'),
+            T('recognition_quality_fast'),
+        ]
+
+    def _recognition_quality_from_label(self, label):
+        return normalize_recognition_quality({
+            T('recognition_quality_quality'): 'quality',
+            T('recognition_quality_balanced'): 'balanced',
+            T('recognition_quality_fast'): 'fast',
+        }.get(str(label or ''), 'quality'))
+
+    def _recognition_quality_label(self, quality=None):
+        quality = (
+            config.get_recognition_quality()
+            if quality is None else quality)
+        return {
+            'quality': T('recognition_quality_quality'),
+            'balanced': T('recognition_quality_balanced'),
+            'fast': T('recognition_quality_fast'),
+        }[normalize_recognition_quality(quality)]
+
     def _open_translation_settings(self):
         open_translation_settings_dialog(
             self, on_saved=self._refresh_translation_provider_status)
@@ -1885,6 +1918,30 @@ class ModernApp(ctk.CTk):
             button_hover_color=ACCENT, text_color=TEXT_PRI,
             dropdown_fg_color=BG_CARD, dropdown_hover_color=BG_CARD_HOVER,
             dropdown_text_color=TEXT_PRI).pack(side='left', padx=10)
+
+        row_recognition = ctk.CTkFrame(grp, fg_color='transparent')
+        row_recognition.pack(fill='x', padx=20, pady=(8, 2))
+        ctk.CTkLabel(
+            row_recognition, text=T('recognition_quality_setting'),
+            text_color=TEXT_PRI, font=(ui_font(), 12, 'bold'),
+            width=116, anchor='w').pack(side='left')
+        self._recognition_quality_var = ctk.StringVar(
+            value=self._recognition_quality_label())
+        ctk.CTkOptionMenu(
+            row_recognition, values=self._recognition_quality_values(),
+            variable=self._recognition_quality_var,
+            command=self._on_recognition_quality_change,
+            width=230, height=34, corner_radius=8,
+            fg_color=BG_INPUT, button_color=BORDER_HOVER,
+            button_hover_color=ACCENT, text_color=TEXT_PRI,
+            dropdown_fg_color=BG_CARD,
+            dropdown_hover_color=BG_CARD_HOVER,
+            dropdown_text_color=TEXT_PRI).pack(side='left', padx=10)
+        ctk.CTkLabel(
+            grp, text=T('recognition_quality_desc'),
+            text_color=TEXT_DIM, font=(ui_font(), 9),
+            wraplength=760, justify='left').pack(
+                anchor='w', padx=(136, 20), pady=(0, 4))
 
         row_translation = ctk.CTkFrame(grp, fg_color='transparent')
         row_translation.pack(fill='x', padx=20, pady=(8, 2))
@@ -2742,7 +2799,8 @@ class ModernApp(ctk.CTk):
         for item in self._dlmgr.get_items():
             # Skip items that are already active or completed; queued ('等待中')
             # items still need enqueue() to (re)start them.
-            if item.state in ('已下載', '下載中', '準備中'):
+            if item.state in (
+                    '已下載', '未偵測到日語語音', '下載中', '準備中'):
                 continue
             self._dlmgr.enqueue(item.url, item.dest or dest)
             count += 1
@@ -2869,6 +2927,12 @@ class ModernApp(ctk.CTk):
     def _on_subtitle_change(self, val):
         config.set_subtitle_pref(self._subtitle_pref_from_label(val))
 
+    def _on_recognition_quality_change(self, val):
+        quality = self._recognition_quality_from_label(val)
+        quality = config.set_recognition_quality(quality)
+        self._recognition_quality_var.set(
+            self._recognition_quality_label(quality))
+
     def _on_conc_change(self, _event=None):
         try:
             requested = int(self._conc_var.get().strip())
@@ -2939,14 +3003,16 @@ class ModernApp(ctk.CTk):
         '下載中': ACCENT, '準備中': WARNING, '等待中': WARNING,
         '字幕準備中': ACCENT, '字幕辨識中': ACCENT,
         '字幕翻譯中': ACCENT,
-        '已下載': SUCCESS, '未完成': WARNING, '已取消': TEXT_DIM,
+        '已下載': SUCCESS, '未偵測到日語語音': TEXT_SEC,
+        '未完成': WARNING, '已取消': TEXT_DIM,
         '網址錯誤': ERROR_C, '封鎖/解析失敗': ERROR_C,
     }
     _STATE_BACKGROUNDS = {
         '下載中': ACCENT_DIM, '準備中': WARNING_DIM, '等待中': WARNING_DIM,
         '字幕準備中': ACCENT_DIM, '字幕辨識中': ACCENT_DIM,
         '字幕翻譯中': ACCENT_DIM,
-        '已下載': SUCCESS_DIM, '未完成': WARNING_DIM, '已取消': BG_BADGE,
+        '已下載': SUCCESS_DIM, '未偵測到日語語音': BG_BADGE,
+        '未完成': WARNING_DIM, '已取消': BG_BADGE,
         '網址錯誤': ERROR_DIM, '封鎖/解析失敗': ERROR_DIM,
     }
 
@@ -3091,7 +3157,9 @@ class ModernApp(ctk.CTk):
                 parts.append(T(
                     'subtitle_queue_status',
                     active=subtitle_active, pending=subtitle_pending))
-            done = sum(1 for i in items if i.state == '已下載')
+            done = sum(
+                1 for i in items
+                if i.state in {'已下載', '未偵測到日語語音'})
             if done:
                 parts.append(f'{state_label("已下載")} {done}')
             self._status_lbl.configure(text='  |  '.join(parts) if parts else T('status_ready'))
@@ -3131,7 +3199,9 @@ class ModernApp(ctk.CTk):
             row.pack_propagate(False)
 
             state_holder = ctk.CTkFrame(
-                row, width=92, height=32, corner_radius=6,
+                row,
+                width=210 if item.state == '未偵測到日語語音' else 92,
+                height=32, corner_radius=6,
                 fg_color=self._STATE_BACKGROUNDS.get(item.state, BG_BADGE))
             state_holder.pack(side='left', padx=(14, 10))
             state_holder.pack_propagate(False)
@@ -3212,7 +3282,10 @@ class ModernApp(ctk.CTk):
             color = self._STATE_COLORS.get(item.state, TEXT_SEC)
             try:
                 w['state_holder'].configure(
-                    fg_color=self._STATE_BACKGROUNDS.get(item.state, BG_BADGE))
+                    fg_color=self._STATE_BACKGROUNDS.get(item.state, BG_BADGE),
+                    width=(
+                        210 if item.state == '未偵測到日語語音'
+                        else 92))
                 w['state_lbl'].configure(
                     text=state_label(item.state) if item.state else '—',
                     text_color=color)

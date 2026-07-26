@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import re
 import secrets
@@ -24,6 +25,7 @@ import tempfile
 import threading
 import time
 import unicodedata
+import wave
 import zipfile
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -51,6 +53,10 @@ WHISPER_RUNTIME_FILES = {
     'Release/whisper-cli.exe': (
         479_232,
         '58245314fb73b30fbd0cf0542c5c172e23f02b6eb7cad7b51e792439cf5e1755',
+    ),
+    'Release/whisper-vad-speech-segments.exe': (
+        362_496,
+        '69a4dbca1828afc3ffa17e5548ab4b96d866068c84db130980b764b15b15b2eb',
     ),
     'Release/whisper.dll': (
         1_366_016,
@@ -102,10 +108,49 @@ WHISPER_RUNTIME_FILES = {
     ),
 }
 
-MODEL_NAME = 'ggml-base-q5_1.bin'
-MODEL_URL = f'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/{MODEL_NAME}'
-MODEL_SHA256 = '422f1ae452ade6f30a004d7e5c6a43195e4433bc370bf23fac9cc591f01a8898'
-MODEL_SIZE = 59_707_625
+WHISPER_MODEL_URL_PREFIX = (
+    'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/')
+
+
+@dataclass(frozen=True)
+class RecognitionProfile:
+    key: str
+    model_name: str
+    model_size: int
+    model_sha256: str
+
+    @property
+    def model_url(self) -> str:
+        return WHISPER_MODEL_URL_PREFIX + self.model_name
+
+
+RECOGNITION_PROFILES = {
+    'quality': RecognitionProfile(
+        'quality',
+        'ggml-large-v3-turbo-q5_0.bin',
+        574_041_195,
+        '394221709cd5ad1f40c46e6031ca61bce88931e6e088c188294c6d5a55ffa7e2',
+    ),
+    'balanced': RecognitionProfile(
+        'balanced',
+        'ggml-small-q5_1.bin',
+        190_085_487,
+        'ae85e4a935d7a567bd102fe55afc16bb595bdb618e11b2fc7591bc08120411bb',
+    ),
+    'fast': RecognitionProfile(
+        'fast',
+        'ggml-base-q5_1.bin',
+        59_707_625,
+        '422f1ae452ade6f30a004d7e5c6a43195e4433bc370bf23fac9cc591f01a8898',
+    ),
+}
+
+# Compatibility mirrors retained for callers and old tests that import the
+# original single-model constants. Runtime selection uses RecognitionProfile.
+MODEL_NAME = RECOGNITION_PROFILES['fast'].model_name
+MODEL_URL = RECOGNITION_PROFILES['fast'].model_url
+MODEL_SHA256 = RECOGNITION_PROFILES['fast'].model_sha256
+MODEL_SIZE = RECOGNITION_PROFILES['fast'].model_size
 
 VAD_MODEL_NAME = 'ggml-silero-v6.2.0.bin'
 VAD_MODEL_URL = (
@@ -136,6 +181,35 @@ TRANSLATION_MANIFEST_SHA256 = (
 TRANSLATION_ENGINE_VERSION = (
     f'fugumt-opus-ct2-int8-v{TRANSLATION_PACK_VERSION}')
 VALID_SUBTITLE_MODES = {'none', 'ja', 'en', 'zh', 'all'}
+VALID_RECOGNITION_QUALITIES = frozenset(RECOGNITION_PROFILES)
+
+# v1.9.1 Silero validation: 0.35 rejected silence, low-level noise, tones,
+# and synthetic non-verbal vowels while retaining all speech in the timing
+# and Common Voice fixtures. Lower thresholds created false subtitle windows.
+VAD_THRESHOLD = 0.35
+VAD_MIN_SPEECH_MS = 100
+VAD_MAX_SPEECH_SECONDS = 28.0
+VAD_SPEECH_PAD_MS = 0
+VAD_SAMPLES_OVERLAP_SECONDS = 0.2
+VAD_MERGE_GAP_SECONDS = 2.0
+RECOGNITION_WINDOW_SPEECH_SPAN_SECONDS = 25.0
+RECOGNITION_WINDOW_PADDING_SECONDS = 0.5
+RECOGNITION_WINDOW_MAX_SECONDS = 28.0
+MAX_VAD_ISLANDS = 20_000
+MAX_WHISPER_SEGMENTS_PER_ISLAND = 512
+MAX_WHISPER_CUES = 100_000
+MAX_WHISPER_RESPONSE_BYTES = 2 * 1024 * 1024
+MAX_WHISPER_TEXT_CHARS = 16_384
+MAX_SRT_FILE_BYTES = 32 * 1024 * 1024
+WHISPER_SAMPLE_RATE = 16_000
+WHISPER_BATCH_SIZE = 180
+ASR_TEMP_RESERVE_BYTES = 64 * 1024 * 1024
+ASR_PIPELINE_VERSION = 'whisper-cpp-v1.9.1-external-vad-context-batch-v4'
+SUBTITLE_PROVENANCE_SCHEMA = 1
+SUBTITLE_PROVENANCE_KIND = 'jable_subtitle_provenance'
+MAX_SUBTITLE_PROVENANCE_BYTES = 64 * 1024
+
+_RECOGNITION_DEFAULT = object()
 
 ProgressCallback = Callable[[str, Optional[int]], None]
 CancelCheck = Callable[[], bool]
@@ -145,6 +219,7 @@ _generation_lock = threading.Lock()
 _translation_runtime_lock = threading.Lock()
 _translation_memory_lock = threading.Lock()
 _translation_provider_state = threading.local()
+_recognition_profile_state = threading.local()
 _verified_paths: dict[str, tuple[int, int, int, int, int, str]] = {}
 
 
@@ -156,10 +231,15 @@ class SubtitleCancelled(SubtitleError):
     """Raised when the owning download job is cancelled."""
 
 
+class SubtitleStorageError(SubtitleError):
+    """Raised before temporary ASR files can exhaust the destination disk."""
+
+
 @dataclass(frozen=True)
 class SubtitleResult:
     files: tuple[str, ...]
     generated: tuple[str, ...]
+    no_speech: bool = False
 
 
 @dataclass(frozen=True)
@@ -167,6 +247,75 @@ class SrtCue:
     index: str
     timing: str
     text: str
+
+
+@dataclass(frozen=True)
+class SpeechIsland:
+    start: float
+    end: float
+
+
+@dataclass(frozen=True)
+class RecognizedSegment:
+    start: float
+    end: float
+    text: str
+
+
+def normalize_recognition_quality(value) -> str:
+    quality = str(value or '').strip().lower().replace('_', '-')
+    aliases = {
+        '': 'quality',
+        'default': 'quality',
+        'precise': 'quality',
+        'precision': 'quality',
+        'accurate': 'quality',
+        'accuracy': 'quality',
+        'high': 'quality',
+        'best': 'quality',
+        'large': 'quality',
+        'large-v3-turbo': 'quality',
+        'medium': 'balanced',
+        'normal': 'balanced',
+        'small': 'balanced',
+        'speed': 'fast',
+        'quick': 'fast',
+        'base': 'fast',
+        'legacy': 'fast',
+    }
+    quality = aliases.get(quality, quality)
+    return quality if quality in VALID_RECOGNITION_QUALITIES else 'quality'
+
+
+def recognition_profile(value=_RECOGNITION_DEFAULT) -> RecognitionProfile:
+    if value is _RECOGNITION_DEFAULT:
+        pinned = getattr(_recognition_profile_state, 'profile', None)
+        if isinstance(pinned, RecognitionProfile):
+            return pinned
+        else:
+            getter = getattr(config, 'get_recognition_quality', None)
+            try:
+                value = getter() if callable(getter) else None
+            except Exception:
+                value = None
+    return RECOGNITION_PROFILES[normalize_recognition_quality(value)]
+
+
+@contextmanager
+def _recognition_profile_scope(profile: RecognitionProfile):
+    had_previous = hasattr(_recognition_profile_state, 'profile')
+    previous = getattr(_recognition_profile_state, 'profile', None)
+    _recognition_profile_state.profile = profile
+    try:
+        yield
+    finally:
+        if had_previous:
+            _recognition_profile_state.profile = previous
+        else:
+            try:
+                del _recognition_profile_state.profile
+            except AttributeError:
+                pass
 
 
 def normalize_subtitle_mode(value) -> str:
@@ -220,6 +369,22 @@ def render_srt(cues: Iterable[SrtCue]) -> str:
     for cue in cues:
         parts.append(f'{cue.index}\n{cue.timing}\n{cue.text.strip()}')
     return '\n\n'.join(parts) + ('\n' if parts else '')
+
+
+def _read_srt_text(path: str) -> str:
+    try:
+        with open(path, 'rb') as handle:
+            payload = handle.read(MAX_SRT_FILE_BYTES + 1)
+    except OSError as exc:
+        raise SubtitleError('Subtitle file could not be read') from exc
+    if len(payload) > MAX_SRT_FILE_BYTES:
+        raise SubtitleError('Subtitle file is too large')
+    try:
+        if payload.startswith((b'\xff\xfe', b'\xfe\xff')):
+            return payload.decode('utf-16')
+        return payload.decode('utf-8-sig')
+    except UnicodeError as exc:
+        raise SubtitleError('Subtitle file encoding is unsupported') from exc
 
 
 def _cache_root() -> str:
@@ -360,12 +525,25 @@ def _download_verified(url: str, destination: str, expected_size: int,
             destination, expected_size, expected_sha256, cancel_check):
         return destination
 
-    os.makedirs(os.path.dirname(destination), exist_ok=True)
     part = destination + '.part'
     try:
-        os.remove(part)
-    except FileNotFoundError:
-        pass
+        os.makedirs(os.path.dirname(destination), exist_ok=True)
+        try:
+            os.remove(part)
+        except FileNotFoundError:
+            pass
+    except OSError as exc:
+        raise SubtitleError(
+            'Subtitle component storage is unavailable') from exc
+    try:
+        free_bytes = shutil.disk_usage(
+            os.path.dirname(destination)).free
+    except OSError:
+        free_bytes = None
+    required_bytes = expected_size + 64 * 1024 * 1024
+    if free_bytes is not None and free_bytes < required_bytes:
+        raise SubtitleError(
+            'Not enough free disk space for the subtitle component')
 
     session = _session()
     try:
@@ -573,10 +751,11 @@ def _prepare_runtime_locked(
         if not exe:
             raise SubtitleError('Unable to install whisper.cpp')
 
-        model = os.path.join(root, 'models', MODEL_NAME)
+        profile = recognition_profile()
+        model = os.path.join(root, 'models', profile.model_name)
         _notify(progress_callback, 'model', 0)
         _download_verified(
-            MODEL_URL, model, MODEL_SIZE, MODEL_SHA256,
+            profile.model_url, model, profile.model_size, profile.model_sha256,
             'model', progress_callback, cancel_check)
         vad_model = os.path.join(root, 'models', VAD_MODEL_NAME)
         _download_verified(
@@ -585,54 +764,781 @@ def _prepare_runtime_locked(
         return exe, model, vad_model
 
 
+def _ensure_asr_temp_space(path: str, additional_bytes: int = 0) -> None:
+    try:
+        required = max(0, int(additional_bytes)) + ASR_TEMP_RESERVE_BYTES
+        free = shutil.disk_usage(path).free
+    except (OSError, TypeError, ValueError, OverflowError):
+        return
+    if free < required:
+        raise SubtitleStorageError(
+            'Not enough free disk space for subtitle processing')
+
+
 def _run_process(args: list[str], log_path: str,
-                 cancel_check: Optional[CancelCheck]) -> None:
+                 cancel_check: Optional[CancelCheck],
+                 cwd: Optional[str] = None,
+                 disk_guard_path: Optional[str] = None) -> None:
     creationflags = getattr(subprocess, 'CREATE_NO_WINDOW', 0) if os.name == 'nt' else 0
-    with open(log_path, 'wb') as log_handle:
-        process = subprocess.Popen(
-            args, stdin=subprocess.DEVNULL, stdout=log_handle,
-            stderr=subprocess.STDOUT, creationflags=creationflags)
-        while process.poll() is None:
-            if cancel_check and cancel_check():
-                process.terminate()
-                try:
-                    process.wait(timeout=3)
-                except subprocess.TimeoutExpired:
-                    process.kill()
-                    process.wait(timeout=3)
-                raise SubtitleCancelled('Subtitle generation cancelled')
-            time.sleep(0.25)
-        if process.returncode != 0:
-            raise SubtitleError(f'Subtitle process exited with code {process.returncode}')
+    if disk_guard_path:
+        _ensure_asr_temp_space(disk_guard_path)
+    try:
+        log_handle = open(log_path, 'wb')
+    except OSError as exc:
+        raise SubtitleError('Subtitle process could not start') from exc
+    with log_handle:
+        process = None
+        try:
+            process = subprocess.Popen(
+                args, stdin=subprocess.DEVNULL, stdout=log_handle,
+                stderr=subprocess.STDOUT, creationflags=creationflags, cwd=cwd)
+        except (OSError, ValueError) as exc:
+            raise SubtitleError('Subtitle process could not start') from exc
+        try:
+            next_disk_check = 0.0
+            while process.poll() is None:
+                if cancel_check and cancel_check():
+                    raise SubtitleCancelled('Subtitle generation cancelled')
+                now = time.monotonic()
+                if disk_guard_path and now >= next_disk_check:
+                    _ensure_asr_temp_space(disk_guard_path)
+                    next_disk_check = now + 0.5
+                time.sleep(0.05)
+            if process.returncode != 0:
+                raise SubtitleError(
+                    f'Subtitle process exited with code {process.returncode}')
+        finally:
+            if process is not None and process.poll() is None:
+                _terminate_process(process)
 
 
 def _extract_audio(video_path: str, wav_path: str, log_path: str,
                    cancel_check: Optional[CancelCheck]) -> None:
     ffmpeg = locate_ffmpeg()
     if not ffmpeg:
-        raise SubtitleError('FFmpeg is unavailable')
-    _run_process([
-        ffmpeg, '-nostdin', '-hide_banner', '-loglevel', 'error', '-y',
-        '-i', video_path, '-vn', '-ac', '1', '-ar', '16000',
-        '-c:a', 'pcm_s16le', wav_path,
-    ], log_path, cancel_check)
+        raise _asr_failure('audio')
+    try:
+        _run_process([
+            ffmpeg, '-nostdin', '-hide_banner', '-loglevel', 'error', '-y',
+            '-i', video_path, '-vn', '-ac', '1', '-ar', '16000',
+            '-c:a', 'pcm_s16le', wav_path,
+        ], log_path, cancel_check,
+            disk_guard_path=os.path.dirname(wav_path))
+    except SubtitleCancelled:
+        raise
+    except SubtitleStorageError:
+        raise
+    except SubtitleError as exc:
+        raise _asr_failure('audio', log_path) from exc
+
+
+_VAD_HEADER_RE = re.compile(
+    r'^[ \t]*Detected[ \t]+(\d+)[ \t]+speech segments:[ \t]*$',
+    re.MULTILINE)
+_VAD_SEGMENT_RE = re.compile(
+    r'^[ \t]*Speech segment[ \t]+(\d+):[ \t]*'
+    r'start[ \t]*=[ \t]*([+-]?(?:\d+(?:\.\d*)?|\.\d+))[ \t]*,'
+    r'[ \t]*end[ \t]*=[ \t]*([+-]?(?:\d+(?:\.\d*)?|\.\d+))[ \t]*$',
+    re.MULTILINE)
+
+
+def _parse_vad_speech_segments(output: str) -> list[SpeechIsland]:
+    """Parse v1.9.1 helper output.
+
+    The helper labels its timestamps like seconds but emits whisper's
+    centisecond units. Keeping the conversion here prevents the 100x offset
+    error that previously ruined cue timing.
+    """
+    text = str(output or '').replace('\r\n', '\n').replace('\r', '\n')
+    headers = _VAD_HEADER_RE.findall(text)
+    if len(headers) != 1:
+        raise SubtitleError('Speech detection returned an invalid result')
+    try:
+        declared = int(headers[0])
+    except (TypeError, ValueError) as exc:
+        raise SubtitleError('Speech detection returned an invalid result') from exc
+    if declared < 0 or declared > MAX_VAD_ISLANDS:
+        raise SubtitleError('Speech detection returned too many segments')
+
+    matches = list(_VAD_SEGMENT_RE.finditer(text))
+    malformed_lines = [
+        line for line in text.splitlines()
+        if 'Speech segment' in line and not _VAD_SEGMENT_RE.fullmatch(line)
+    ]
+    if malformed_lines or len(matches) != declared:
+        raise SubtitleError('Speech detection returned an invalid result')
+
+    islands: list[SpeechIsland] = []
+    previous_start = -1.0
+    for expected_index, match in enumerate(matches):
+        try:
+            index = int(match.group(1))
+            # v1.9.1 prints t0/t1 in centiseconds, despite the decimal form.
+            start = float(match.group(2)) / 100.0
+            end = float(match.group(3)) / 100.0
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise SubtitleError(
+                'Speech detection returned an invalid result') from exc
+        if (
+                index != expected_index
+                or not math.isfinite(start)
+                or not math.isfinite(end)
+                or start < 0.0
+                or end <= start
+                or start < previous_start
+                or end > 24 * 60 * 60):
+            raise SubtitleError('Speech detection returned invalid timing')
+        islands.append(SpeechIsland(start, end))
+        previous_start = start
+    return islands
+
+
+def _merge_speech_islands(
+        islands: Iterable[SpeechIsland],
+        max_gap_seconds: float = VAD_MERGE_GAP_SECONDS,
+        max_duration_seconds: float = VAD_MAX_SPEECH_SECONDS,
+) -> list[SpeechIsland]:
+    try:
+        gap_limit = float(max_gap_seconds)
+        duration_limit = float(max_duration_seconds)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise SubtitleError('Speech detection settings are invalid') from exc
+    if (
+            not math.isfinite(gap_limit) or gap_limit < 0.0
+            or not math.isfinite(duration_limit) or duration_limit <= 0.0):
+        raise SubtitleError('Speech detection settings are invalid')
+
+    merged: list[SpeechIsland] = []
+    previous_start = -1.0
+    for value in islands:
+        try:
+            start = float(value.start)
+            end = float(value.end)
+        except (AttributeError, TypeError, ValueError, OverflowError) as exc:
+            raise SubtitleError('Speech detection returned invalid timing') from exc
+        if (
+                not math.isfinite(start) or not math.isfinite(end)
+                or start < 0.0 or end <= start or start < previous_start):
+            raise SubtitleError('Speech detection returned invalid timing')
+        previous_start = start
+        current = SpeechIsland(start, end)
+        if not merged:
+            merged.append(current)
+            continue
+        prior = merged[-1]
+        combined_end = max(prior.end, current.end)
+        if (
+                current.start - prior.end <= gap_limit
+                and combined_end - prior.start <= duration_limit):
+            merged[-1] = SpeechIsland(prior.start, combined_end)
+        else:
+            merged.append(current)
+        if len(merged) > MAX_VAD_ISLANDS:
+            raise SubtitleError('Speech detection returned too many segments')
+    return merged
+
+
+def _build_recognition_windows(
+        islands: Iterable[SpeechIsland], audio_duration: float,
+        max_speech_span_seconds: float = (
+            RECOGNITION_WINDOW_SPEECH_SPAN_SECONDS),
+        padding_seconds: float = RECOGNITION_WINDOW_PADDING_SECONDS,
+        max_window_seconds: float = RECOGNITION_WINDOW_MAX_SECONDS,
+        max_gap_seconds: float = VAD_MERGE_GAP_SECONDS,
+) -> list[SpeechIsland]:
+    """Group VAD hits into context-rich, non-overlapping ASR windows.
+
+    VAD is a speech gate, not a chopping strategy. Sending every tiny hit to
+    Whisper independently destroys sentence context and substantially worsens
+    Japanese recognition. Windows therefore retain the original silence
+    between nearby utterances while remaining below Whisper's 30-second
+    receptive window.
+    """
+    try:
+        duration = float(audio_duration)
+        span_limit = float(max_speech_span_seconds)
+        padding = float(padding_seconds)
+        window_limit = float(max_window_seconds)
+        gap_limit = float(max_gap_seconds)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise SubtitleError('Speech detection settings are invalid') from exc
+    if (
+            not math.isfinite(duration) or duration < 0.0
+            or not math.isfinite(span_limit) or span_limit <= 0.0
+            or not math.isfinite(padding) or padding < 0.0
+            or not math.isfinite(window_limit) or window_limit <= 0.0
+            or not math.isfinite(gap_limit) or gap_limit < 0.0
+            or span_limit + 2.0 * padding > window_limit):
+        raise SubtitleError('Speech detection settings are invalid')
+
+    source = list(islands)
+    if not source:
+        return []
+    groups: list[SpeechIsland] = []
+    previous_start = -1.0
+    for value in source:
+        try:
+            start = float(value.start)
+            end = float(value.end)
+        except (AttributeError, TypeError, ValueError, OverflowError) as exc:
+            raise SubtitleError('Speech detection returned invalid timing') from exc
+        if (
+                not math.isfinite(start) or not math.isfinite(end)
+                or start < 0.0 or end <= start or end > duration + 0.5
+                or start < previous_start):
+            raise SubtitleError('Speech detection returned invalid timing')
+        start = min(start, duration)
+        end = min(end, duration)
+        if end - start > window_limit:
+            # The VAD helper may extend a max-length segment by its configured
+            # speech padding. Trim only that small symmetric margin.
+            excess = end - start - window_limit
+            if excess > 2.0 * VAD_SPEECH_PAD_MS / 1000.0 + 1e-6:
+                raise SubtitleError(
+                    'Speech detection returned invalid timing')
+            start += excess / 2.0
+            end -= excess / 2.0
+        previous_start = start
+        if (
+                groups
+                and start - groups[-1].end <= gap_limit
+                and end - groups[-1].start <= span_limit):
+            groups[-1] = SpeechIsland(
+                groups[-1].start, max(groups[-1].end, end))
+        else:
+            groups.append(SpeechIsland(start, end))
+
+    windows: list[SpeechIsland] = []
+    for group in groups:
+        context_budget = max(
+            0.0, window_limit - (group.end - group.start))
+        left_context = min(padding, context_budget / 2.0, group.start)
+        right_context = min(
+            padding, context_budget - left_context,
+            duration - group.end)
+        # Reuse boundary-clipped context budget on the other side.
+        remaining = context_budget - left_context - right_context
+        if remaining > 0.0:
+            extra_right = min(
+                remaining, padding - right_context,
+                duration - group.end - right_context)
+            right_context += extra_right
+            remaining -= extra_right
+        if remaining > 0.0:
+            left_context += min(
+                remaining, padding - left_context,
+                group.start - left_context)
+        windows.append(SpeechIsland(
+            group.start - left_context,
+            group.end + right_context,
+        ))
+    # Padding must not transcribe the same audio twice. Split any overlap as
+    # close as possible to the midpoint between the underlying speech groups,
+    # but never expand either already-bounded recognition window.
+    for index in range(len(windows) - 1):
+        if windows[index].end > windows[index + 1].start:
+            target = (
+                groups[index].end + groups[index + 1].start) / 2.0
+            boundary = min(
+                max(target, windows[index + 1].start),
+                windows[index].end,
+            )
+            windows[index] = SpeechIsland(
+                windows[index].start, boundary)
+            windows[index + 1] = SpeechIsland(
+                boundary, windows[index + 1].end)
+    for window in windows:
+        if (
+                window.end <= window.start
+                or window.end - window.start > window_limit + 1e-6):
+            raise SubtitleError('Speech detection returned invalid timing')
+    return windows
+
+
+def _terminate_process(process) -> None:
+    if process is None:
+        return
+    try:
+        if process.poll() is not None:
+            return
+    except (OSError, ValueError):
+        return
+    try:
+        process.terminate()
+    except (OSError, ValueError):
+        pass
+    try:
+        process.wait(timeout=3)
+        return
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        pass
+    try:
+        process.kill()
+    except (OSError, ValueError):
+        pass
+    try:
+        process.wait(timeout=3)
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        pass
+
+
+def _asr_failure(
+        category: str, log_path: Optional[str] = None) -> SubtitleError:
+    evidence = ''
+    if log_path:
+        try:
+            with open(log_path, 'rb') as handle:
+                evidence = handle.read(256 * 1024).decode(
+                    'utf-8', errors='ignore').casefold()
+        except OSError:
+            evidence = ''
+    if any(marker in evidence for marker in (
+            'out of memory', 'bad_alloc', 'cannot allocate memory',
+            'failed to allocate', 'not enough memory')):
+        category = 'oom'
+    elif any(marker in evidence for marker in (
+            'failed to initialize whisper context',
+            'model init failed', 'invalid model', 'failed to load model')):
+        category = 'model'
+
+    messages = {
+        'oom': (
+            'Speech recognition ran out of memory; choose a lighter '
+            'recognition quality'),
+        'model': 'Speech recognition model could not be loaded',
+        'audio': 'Speech recognition could not read the extracted audio',
+        'runtime': 'Speech recognition runtime failed',
+    }
+    return SubtitleError(messages.get(category, messages['runtime']))
+
+
+def _read_file_bounded(path: str, limit: int) -> bytes:
+    try:
+        with open(path, 'rb') as handle:
+            payload = handle.read(limit + 1)
+    except OSError as exc:
+        raise _asr_failure('runtime') from exc
+    if len(payload) > limit:
+        raise SubtitleError('Speech recognition runtime returned too much data')
+    return payload
+
+
+def _run_external_vad(
+        vad_exe: str, vad_model: str, wav_path: str, work_dir: str,
+        cancel_check: Optional[CancelCheck],
+) -> list[SpeechIsland]:
+    output_path = os.path.join(work_dir, 'vad-output.txt')
+    log_path = os.path.join(work_dir, 'vad.log')
+    threads = max(1, min(8, (os.cpu_count() or 4) - 1))
+    args = [
+        vad_exe,
+        '--file', wav_path,
+        '--vad-model', vad_model,
+        '--vad-threshold', str(VAD_THRESHOLD),
+        '--vad-min-speech-duration-ms', str(VAD_MIN_SPEECH_MS),
+        '--vad-max-speech-duration-s', str(int(VAD_MAX_SPEECH_SECONDS)),
+        '--vad-speech-pad-ms', str(VAD_SPEECH_PAD_MS),
+        '--vad-samples-overlap', str(VAD_SAMPLES_OVERLAP_SECONDS),
+        '--threads', str(threads),
+        '--no-prints',
+    ]
+    creationflags = (
+        getattr(subprocess, 'CREATE_NO_WINDOW', 0) if os.name == 'nt' else 0)
+    process = None
+    try:
+        with (
+                open(output_path, 'wb') as output_handle,
+                open(log_path, 'wb') as log_handle):
+            try:
+                process = subprocess.Popen(
+                    args,
+                    stdin=subprocess.DEVNULL,
+                    stdout=output_handle,
+                    stderr=log_handle,
+                    cwd=os.path.dirname(vad_exe) or None,
+                    creationflags=creationflags,
+                )
+            except (OSError, ValueError) as exc:
+                raise _asr_failure('runtime', log_path) from exc
+            while process.poll() is None:
+                if cancel_check and cancel_check():
+                    _terminate_process(process)
+                    raise SubtitleCancelled('Subtitle generation cancelled')
+                time.sleep(0.05)
+        if process.returncode != 0:
+            raise _asr_failure('runtime', log_path)
+        try:
+            output = _read_file_bounded(
+                output_path, 4 * 1024 * 1024).decode('utf-8', errors='strict')
+        except UnicodeError as exc:
+            raise _asr_failure('runtime', log_path) from exc
+        return _parse_vad_speech_segments(output)
+    except OSError as exc:
+        raise _asr_failure('runtime', log_path) from exc
+    finally:
+        if process is not None and process.poll() is None:
+            _terminate_process(process)
+
+
+def _validate_pcm16_wav(wav_path: str) -> tuple[int, float]:
+    try:
+        with wave.open(wav_path, 'rb') as source:
+            channels = source.getnchannels()
+            sample_width = source.getsampwidth()
+            frame_rate = source.getframerate()
+            frame_count = source.getnframes()
+            compression = source.getcomptype()
+    except (OSError, EOFError, wave.Error) as exc:
+        raise _asr_failure('audio') from exc
+    if (
+            channels != 1
+            or sample_width != 2
+            or frame_rate != WHISPER_SAMPLE_RATE
+            or compression != 'NONE'
+            or frame_count < 0):
+        raise _asr_failure('audio')
+    duration = frame_count / float(frame_rate)
+    if not math.isfinite(duration) or duration > 24 * 60 * 60:
+        raise _asr_failure('audio')
+    return frame_count, duration
+
+
+def _slice_pcm16_wav(
+        wav_path: str, destination: str, island: SpeechIsland,
+        total_frames: int,
+) -> float:
+    start_frame = max(
+        0, min(total_frames, int(round(island.start * WHISPER_SAMPLE_RATE))))
+    end_frame = max(
+        start_frame,
+        min(total_frames, int(round(island.end * WHISPER_SAMPLE_RATE))))
+    if end_frame <= start_frame:
+        raise SubtitleError('Speech detection returned invalid timing')
+    _ensure_asr_temp_space(
+        os.path.dirname(destination),
+        (end_frame - start_frame) * 2 + 44)
+    try:
+        with wave.open(wav_path, 'rb') as source:
+            source.setpos(start_frame)
+            frames = source.readframes(end_frame - start_frame)
+        if len(frames) != (end_frame - start_frame) * 2:
+            raise _asr_failure('audio')
+        with wave.open(destination, 'wb') as output:
+            output.setnchannels(1)
+            output.setsampwidth(2)
+            output.setframerate(WHISPER_SAMPLE_RATE)
+            output.writeframes(frames)
+    except SubtitleError:
+        raise
+    except (OSError, EOFError, wave.Error) as exc:
+        raise _asr_failure('audio') from exc
+    return (end_frame - start_frame) / float(WHISPER_SAMPLE_RATE)
+
+
+_CLI_TIMESTAMP_RE = re.compile(
+    r'^(\d{2,6}):([0-5]\d):([0-5]\d),(\d{3})$')
+
+
+def _parse_cli_timestamp(value) -> int:
+    if not isinstance(value, str):
+        raise SubtitleError(
+            'Speech recognition runtime returned an invalid response')
+    match = _CLI_TIMESTAMP_RE.fullmatch(value)
+    if not match:
+        raise SubtitleError(
+            'Speech recognition runtime returned invalid timing')
+    hours, minutes, seconds, milliseconds = (
+        int(part) for part in match.groups())
+    return (
+        hours * 3_600_000
+        + minutes * 60_000
+        + seconds * 1000
+        + milliseconds
+    )
+
+
+def _strict_json_file(path: str) -> dict:
+    payload = _read_file_bounded(path, MAX_WHISPER_RESPONSE_BYTES)
+
+    def reject_constant(_value):
+        raise ValueError('non-finite JSON number')
+
+    try:
+        root = json.loads(
+            payload.decode('utf-8'), parse_constant=reject_constant)
+    except (UnicodeError, ValueError, TypeError) as exc:
+        raise SubtitleError(
+            'Speech recognition runtime returned an invalid response') from exc
+    if not isinstance(root, dict):
+        raise SubtitleError(
+            'Speech recognition runtime returned an invalid response')
+    return root
+
+
+def _normalize_recognized_text(value: str) -> str:
+    if any(
+            unicodedata.category(character) == 'Cc'
+            and character not in '\r\n\t'
+            for character in value):
+        raise SubtitleError(
+            'Speech recognition runtime returned an invalid response')
+    # whisper-cli emits one logical cue per segment. Flattening whitespace
+    # prevents model text from accidentally creating extra SRT blocks.
+    return ' '.join(value.split())
+
+
+def _parse_whisper_cli_payload(
+        root: dict, island: SpeechIsland, island_duration: float,
+) -> list[RecognizedSegment]:
+    params = root.get('params')
+    result = root.get('result')
+    transcription = root.get('transcription')
+    if (
+            not isinstance(params, dict)
+            or params.get('language') != 'ja'
+            or params.get('translate') is not False
+            or not isinstance(result, dict)
+            or result.get('language') != 'ja'
+            or not isinstance(transcription, list)
+            or len(transcription) > MAX_WHISPER_SEGMENTS_PER_ISLAND
+            or not math.isfinite(island_duration)
+            or island_duration <= 0.0):
+        raise SubtitleError(
+            'Speech recognition runtime returned an invalid response')
+
+    recognized: list[RecognizedSegment] = []
+    previous_end_ms = -1
+    maximum_ms = int(round(island_duration * 1000.0))
+    for segment in transcription:
+        if not isinstance(segment, dict):
+            raise SubtitleError(
+                'Speech recognition runtime returned an invalid response')
+        timestamps = segment.get('timestamps')
+        offsets = segment.get('offsets')
+        text = segment.get('text')
+        if (
+                not isinstance(timestamps, dict)
+                or not isinstance(offsets, dict)
+                or not isinstance(text, str)
+                or len(text) > MAX_WHISPER_TEXT_CHARS
+                or '\x00' in text):
+            raise SubtitleError(
+                'Speech recognition runtime returned an invalid response')
+        start_ms = offsets.get('from')
+        end_ms = offsets.get('to')
+        if (
+                isinstance(start_ms, bool)
+                or isinstance(end_ms, bool)
+                or not isinstance(start_ms, int)
+                or not isinstance(end_ms, int)
+                or start_ms < 0
+                or end_ms <= start_ms
+                or start_ms < previous_end_ms
+                or end_ms > maximum_ms + 1000
+                or _parse_cli_timestamp(timestamps.get('from')) != start_ms
+                or _parse_cli_timestamp(timestamps.get('to')) != end_ms):
+            raise SubtitleError(
+                'Speech recognition runtime returned invalid timing')
+        previous_end_ms = end_ms
+        cue_text = _normalize_recognized_text(text)
+        if not cue_text:
+            continue
+        local_start = min(max(start_ms / 1000.0, 0.0), island_duration)
+        local_end = min(max(end_ms / 1000.0, 0.0), island_duration)
+        absolute_start = min(
+            max(island.start + local_start, island.start), island.end)
+        absolute_end = min(
+            max(island.start + local_end, island.start), island.end)
+        if absolute_end <= absolute_start:
+            raise SubtitleError(
+                'Speech recognition runtime returned invalid timing')
+        recognized.append(
+            RecognizedSegment(absolute_start, absolute_end, cue_text))
+    return recognized
+
+
+def _whisper_cli_batch_args(
+        exe: str, model: str, relative_wavs: Iterable[str],
+) -> list[str]:
+    threads = max(1, min(8, (os.cpu_count() or 4) - 1))
+    args = [
+        exe,
+        '-m', model,
+        '-l', 'ja',
+        '-oj',
+        '-np',
+        '-t', str(threads),
+        '-bs', '5',
+        '-bo', '5',
+        '-tp', '0',
+        '-tpi', '0.2',
+    ]
+    for relative_path in relative_wavs:
+        if (
+                not re.fullmatch(r'island-\d{5}\.wav', relative_path)
+                or os.path.basename(relative_path) != relative_path):
+            raise SubtitleError(
+                'Speech recognition runtime received an unsafe input name')
+        args.extend(('-f', relative_path))
+    return args
+
+
+def _run_whisper_cli_batch(
+        exe: str, model: str, work_dir: str,
+        relative_wavs: list[str], batch_index: int,
+        cancel_check: Optional[CancelCheck],
+) -> list[dict]:
+    if not relative_wavs or len(relative_wavs) > WHISPER_BATCH_SIZE:
+        raise SubtitleError(
+            'Speech recognition runtime received an invalid batch')
+    log_path = os.path.join(work_dir, f'batch-{batch_index:05d}.log')
+    try:
+        _run_process(
+            _whisper_cli_batch_args(exe, model, relative_wavs),
+            log_path,
+            cancel_check,
+            cwd=work_dir,
+            disk_guard_path=work_dir,
+        )
+    except SubtitleCancelled:
+        raise
+    except SubtitleError as exc:
+        raise _asr_failure('runtime', log_path) from exc
+    results: list[dict] = []
+    for relative_path in relative_wavs:
+        _check_cancel(cancel_check)
+        json_path = os.path.join(work_dir, relative_path + '.json')
+        if not os.path.isfile(json_path):
+            raise _asr_failure('runtime', log_path)
+        results.append(_strict_json_file(json_path))
+    return results
+
+
+def _format_srt_timestamp(seconds: float) -> str:
+    if not math.isfinite(seconds) or seconds < 0.0:
+        raise SubtitleError('Speech recognition runtime returned invalid timing')
+    milliseconds = int(round(seconds * 1000.0))
+    hours, remainder = divmod(milliseconds, 3_600_000)
+    minutes, remainder = divmod(remainder, 60_000)
+    whole_seconds, millis = divmod(remainder, 1000)
+    return f'{hours:02d}:{minutes:02d}:{whole_seconds:02d},{millis:03d}'
 
 
 def _run_whisper(exe: str, model: str, vad_model: str, wav_path: str,
                  output_base: str, log_path: str,
-                 cancel_check: Optional[CancelCheck]) -> str:
-    threads = max(1, min(8, (os.cpu_count() or 4) - 1))
-    args = [
-        exe, '-m', model, '-f', wav_path, '-l', 'ja',
-        '-osrt', '-of', output_base, '-np', '-t', str(threads),
-        '-bs', '1', '-bo', '1', '-nf', '-sns',
-        '--vad', '-vm', vad_model,
-    ]
-    _run_process(args, log_path, cancel_check)
-    result = output_base + '.srt'
-    if not os.path.isfile(result):
-        raise SubtitleError('Whisper did not create an SRT subtitle file')
-    return result
+                 cancel_check: Optional[CancelCheck]) -> Optional[str]:
+    del log_path  # All ASR logs live only in the private per-run temp folder.
+    runtime_dir = os.path.dirname(os.path.abspath(exe))
+    vad_exe = os.path.join(
+        runtime_dir, 'whisper-vad-speech-segments.exe')
+    if not os.path.isfile(exe) or not os.path.isfile(vad_exe):
+        raise _asr_failure('runtime')
+
+    try:
+        work_dir = tempfile.mkdtemp(prefix='jable-asr-')
+    except OSError as exc:
+        raise _asr_failure('runtime') from exc
+    try:
+        total_frames, audio_duration = _validate_pcm16_wav(wav_path)
+        islands = _run_external_vad(
+            vad_exe, vad_model, wav_path, work_dir, cancel_check)
+        clamped: list[SpeechIsland] = []
+        for island in islands:
+            if island.start > audio_duration + 0.5:
+                raise SubtitleError(
+                    'Speech detection returned invalid timing')
+            start = min(max(0.0, island.start), audio_duration)
+            end = min(max(0.0, island.end), audio_duration)
+            if end <= start:
+                raise SubtitleError(
+                    'Speech detection returned invalid timing')
+            clamped.append(SpeechIsland(start, end))
+        islands = _merge_speech_islands(clamped)
+        if not islands:
+            return None
+        windows = _build_recognition_windows(islands, audio_duration)
+        slice_bytes = sum(
+            (
+                max(
+                    0,
+                    min(
+                        total_frames,
+                        int(round(window.end * WHISPER_SAMPLE_RATE)),
+                    )
+                    - max(
+                        0,
+                        min(
+                            total_frames,
+                            int(round(window.start * WHISPER_SAMPLE_RATE)),
+                        ),
+                    ),
+                )
+                * 2
+                + 44
+            )
+            for window in windows
+        )
+        _ensure_asr_temp_space(work_dir, slice_bytes)
+
+        relative_wavs: list[str] = []
+        window_durations: list[float] = []
+        for index, window in enumerate(windows):
+            _check_cancel(cancel_check)
+            relative_path = f'island-{index:05d}.wav'
+            relative_wavs.append(relative_path)
+            window_durations.append(_slice_pcm16_wav(
+                wav_path,
+                os.path.join(work_dir, relative_path),
+                window,
+                total_frames,
+            ))
+
+        recognized: list[RecognizedSegment] = []
+        for batch_index, batch_start in enumerate(
+                range(0, len(relative_wavs), WHISPER_BATCH_SIZE)):
+            _check_cancel(cancel_check)
+            batch_end = min(
+                batch_start + WHISPER_BATCH_SIZE, len(relative_wavs))
+            batch_names = relative_wavs[batch_start:batch_end]
+            payloads = _run_whisper_cli_batch(
+                exe, model, work_dir, batch_names, batch_index, cancel_check)
+            if len(payloads) != len(batch_names):
+                raise _asr_failure('runtime')
+            for offset, payload in enumerate(payloads):
+                window_index = batch_start + offset
+                cues = _parse_whisper_cli_payload(
+                    payload,
+                    windows[window_index],
+                    window_durations[window_index],
+                )
+                if len(recognized) + len(cues) > MAX_WHISPER_CUES:
+                    raise SubtitleError(
+                        'Speech recognition runtime returned too many segments')
+                # Do not globally deduplicate text. Distinct windows can
+                # legitimately contain the same repeated utterance.
+                recognized.extend(cues)
+
+        if not recognized:
+            raise SubtitleError(
+                'Speech was detected but no valid subtitle cues were produced')
+        srt_cues = [
+            SrtCue(
+                str(index),
+                (
+                    f'{_format_srt_timestamp(cue.start)} --> '
+                    f'{_format_srt_timestamp(cue.end)}'),
+                cue.text,
+            )
+            for index, cue in enumerate(recognized, start=1)
+        ]
+        result = output_base + '.srt'
+        try:
+            _atomic_write_text(result, render_srt(srt_cues))
+        except OSError as exc:
+            raise _asr_failure('runtime') from exc
+        return result
+    finally:
+        shutil.rmtree(work_dir, ignore_errors=True)
 
 
 def _atomic_copy(source: str, destination: str) -> None:
@@ -1523,12 +2429,9 @@ def translate_srt(
         cancel_check: Optional[CancelCheck] = None,
         source_language: str = 'ja') -> str:
     _check_cancel(cancel_check)
-    with open(source_path, 'r', encoding='utf-8-sig') as handle:
-        cues = parse_srt(handle.read())
+    cues = parse_srt(_read_srt_text(source_path))
     if not cues:
-        _check_cancel(cancel_check)
-        _atomic_write_text(destination_path, '')
-        return destination_path
+        raise SubtitleError('Source subtitle does not contain any cues')
 
     translated_texts = translate_cues(
         [cue.text for cue in cues], source_language, target_language,
@@ -1552,6 +2455,108 @@ def translate_srt_to_zh_tw(
     return translate_srt(
         source_path, destination_path, 'zh-TW', 'translate_zh',
         progress_callback, cancel_check, source_language=source_language)
+
+
+def run_whisper_diagnostic(
+        input_path: str, destination_path: str) -> dict:
+    """Exercise the real ASR pipeline and write transcript-free evidence."""
+    if (
+            not str(input_path or '').strip()
+            or not str(destination_path or '').strip()):
+        raise SubtitleError(
+            'Speech recognition diagnostic paths are required')
+    source = os.path.abspath(
+        os.path.expanduser(str(input_path).strip()))
+    destination = os.path.abspath(
+        os.path.expanduser(str(destination_path).strip()))
+    if os.path.normcase(source) == os.path.normcase(destination):
+        raise SubtitleError(
+            'Speech recognition diagnostic paths must differ')
+    if not os.path.isfile(source):
+        raise SubtitleError(
+            'Speech recognition diagnostic input was not found')
+
+    profile = recognition_profile()
+    started = time.perf_counter()
+    with _recognition_profile_scope(profile):
+        exe, model, vad_model = _prepare_runtime(None, None)
+    if os.path.basename(model) != profile.model_name:
+        raise SubtitleError(
+            'Speech recognition diagnostic model selection changed')
+
+    cues: list[SrtCue] = []
+    audio_duration = 0.0
+    with tempfile.TemporaryDirectory(
+            prefix='jable-whisper-diagnostic-') as temp_dir:
+        wav = os.path.join(temp_dir, 'audio.wav')
+        log = os.path.join(temp_dir, 'audio.log')
+        _extract_audio(source, wav, log, None)
+        _frames, audio_duration = _validate_pcm16_wav(wav)
+        result = _run_whisper(
+            exe, model, vad_model, wav,
+            os.path.join(temp_dir, 'diagnostic'), log, None)
+        if result:
+            try:
+                cues = parse_srt(_read_srt_text(result))
+            except SubtitleError as exc:
+                raise _asr_failure('runtime') from exc
+
+    timing_pairs: list[list[int]] = []
+    previous_end = -1
+    timing_monotonic = True
+    transcript_texts: list[str] = []
+    for cue in cues:
+        parts = cue.timing.split(' --> ')
+        if len(parts) != 2:
+            raise SubtitleError(
+                'Speech recognition diagnostic returned invalid timing')
+        start_ms = _parse_cli_timestamp(parts[0])
+        end_ms = _parse_cli_timestamp(parts[1])
+        if end_ms <= start_ms or start_ms < previous_end:
+            timing_monotonic = False
+        previous_end = end_ms
+        timing_pairs.append([start_ms, end_ms])
+        transcript_texts.append(cue.text)
+
+    transcript_bytes = '\n'.join(transcript_texts).encode('utf-8')
+    timing_bytes = json.dumps(
+        timing_pairs, separators=(',', ':')).encode('ascii')
+    wall_seconds = max(0.0, time.perf_counter() - started)
+    payload = {
+        'schema': 1,
+        'kind': 'jable_whisper_diagnostic',
+        'frozen': bool(getattr(sys, 'frozen', False)),
+        'runtime_version': WHISPER_VERSION,
+        'profile': profile.key,
+        'model_sha256': profile.model_sha256,
+        'asr_signature': _asr_signature(profile),
+        'audio_duration_ms': int(round(audio_duration * 1000.0)),
+        'cue_count': len(cues),
+        'no_speech': not bool(cues),
+        'timing_monotonic': timing_monotonic,
+        'first_cue_start_ms': (
+            timing_pairs[0][0] if timing_pairs else None),
+        'last_cue_end_ms': (
+            timing_pairs[-1][1] if timing_pairs else None),
+        'timing_sha256': hashlib.sha256(timing_bytes).hexdigest(),
+        'transcript_characters': len(
+            '\n'.join(transcript_texts)),
+        'transcript_sha256': hashlib.sha256(
+            transcript_bytes).hexdigest(),
+        'wall_milliseconds': int(round(wall_seconds * 1000.0)),
+        'real_time_factor': (
+            round(wall_seconds / audio_duration, 4)
+            if audio_duration > 0.0 else None
+        ),
+    }
+    _atomic_write_text(
+        destination,
+        json.dumps(
+            payload,
+            ensure_ascii=True,
+            sort_keys=True,
+            separators=(',', ':')) + '\n')
+    return payload
 
 
 def run_local_translation_diagnostic(destination_path: str) -> dict:
@@ -1691,14 +2696,326 @@ def _atomic_write_text(destination: str, text: str) -> None:
                 pass
 
 
+def _stable_signature(payload: dict) -> str:
+    encoded = json.dumps(
+        payload,
+        ensure_ascii=True,
+        sort_keys=True,
+        separators=(',', ':'),
+    ).encode('utf-8')
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _asr_signature(profile: RecognitionProfile) -> str:
+    """Identify every setting that can materially change an ASR sidecar."""
+    cli_sha256 = WHISPER_RUNTIME_FILES['Release/whisper-cli.exe'][1]
+    vad_helper_sha256 = WHISPER_RUNTIME_FILES[
+        'Release/whisper-vad-speech-segments.exe'][1]
+    return _stable_signature({
+        'pipeline': ASR_PIPELINE_VERSION,
+        'runtime': {
+            'version': WHISPER_VERSION,
+            'archive_sha256': WHISPER_ARCHIVE_SHA256,
+            'cli_sha256': cli_sha256,
+            'vad_helper_sha256': vad_helper_sha256,
+        },
+        'model': {
+            'key': profile.key,
+            'name': profile.model_name,
+            'size': profile.model_size,
+            'sha256': profile.model_sha256,
+        },
+        'vad': {
+            'model_sha256': VAD_MODEL_SHA256,
+            'threshold': VAD_THRESHOLD,
+            'minimum_speech_ms': VAD_MIN_SPEECH_MS,
+            'maximum_speech_seconds': VAD_MAX_SPEECH_SECONDS,
+            'speech_padding_ms': VAD_SPEECH_PAD_MS,
+            'sample_overlap_seconds': VAD_SAMPLES_OVERLAP_SECONDS,
+            'merge_gap_seconds': VAD_MERGE_GAP_SECONDS,
+        },
+        'windows': {
+            'speech_span_seconds': RECOGNITION_WINDOW_SPEECH_SPAN_SECONDS,
+            'padding_seconds': RECOGNITION_WINDOW_PADDING_SECONDS,
+            'maximum_seconds': RECOGNITION_WINDOW_MAX_SECONDS,
+        },
+        'decoder': {
+            'language': 'ja',
+            'translate': False,
+            'beam_size': 5,
+            'best_of': 5,
+            'temperature_fallback': True,
+            'temperature': 0.0,
+            'temperature_increment': 0.2,
+            'suppress_non_speech_tokens': False,
+            'output': 'json',
+            'batch_size': WHISPER_BATCH_SIZE,
+        },
+    })
+
+
+def _media_identity(path: str) -> str:
+    """Return a path-free, copy-stable sampled identity for downloaded media."""
+    try:
+        digest = hashlib.sha256()
+        with open(path, 'rb') as handle:
+            metadata = os.fstat(handle.fileno())
+            size = int(metadata.st_size)
+            sample_size = 64 * 1024
+            offsets = sorted({
+                0,
+                max(0, size // 2 - sample_size // 2),
+                max(0, size - sample_size),
+            })
+            for offset in offsets:
+                handle.seek(offset)
+                chunk = handle.read(sample_size)
+                digest.update(offset.to_bytes(8, 'big', signed=False))
+                digest.update(len(chunk).to_bytes(4, 'big', signed=False))
+                digest.update(chunk)
+            after = os.fstat(handle.fileno())
+    except OSError as exc:
+        raise SubtitleError('Downloaded video file was not found') from exc
+    if (
+            int(after.st_size) != size
+            or int(after.st_mtime_ns) != int(metadata.st_mtime_ns)):
+        raise SubtitleError('Downloaded video file changed during subtitle setup')
+    return _stable_signature({
+        'schema': 'sample-v1',
+        'size': size,
+        'sample_sha256': digest.hexdigest(),
+    })
+
+
+def _asr_source_identity(
+        asr_signature: str, media_identity: str) -> str:
+    return f'asr:{asr_signature}:{media_identity}'
+
+
+def _translation_signature(profile) -> str:
+    if profile is None:
+        raise SubtitleError('Translation provider settings are unavailable')
+    uses_api = bool(getattr(profile, 'uses_api', False))
+    if uses_api:
+        endpoint_sha256 = hashlib.sha256(
+            _translation_api_endpoint(profile).encode('utf-8')).hexdigest()
+        identity = {
+            'pipeline': 'llm-subtitle-v1',
+            'provider_sha256': hashlib.sha256(
+                str(getattr(profile, 'provider', '')).encode(
+                    'utf-8')).hexdigest(),
+            'model_sha256': hashlib.sha256(
+                str(getattr(profile, 'model', '')).encode(
+                    'utf-8')).hexdigest(),
+            'endpoint_sha256': endpoint_sha256,
+            'memory_version': _translation_api_memory_version(profile),
+        }
+    else:
+        identity = {
+            'pipeline': 'local-subtitle-v1',
+            'memory_version': _translation_memory_version(),
+        }
+    return _stable_signature(identity)
+
+
+def _subtitle_provenance_path(video_path: str) -> str:
+    return os.path.splitext(os.path.abspath(video_path))[0] + (
+        '.jable-subtitles.json')
+
+
+def _empty_subtitle_provenance() -> dict:
+    return {
+        'schema': SUBTITLE_PROVENANCE_SCHEMA,
+        'kind': SUBTITLE_PROVENANCE_KIND,
+        'tracks': {},
+    }
+
+
+def _load_subtitle_provenance(path: str) -> dict:
+    """Load bounded app metadata; malformed metadata never owns a subtitle."""
+    try:
+        if (
+                not os.path.isfile(path)
+                or os.path.getsize(path) <= 0
+                or os.path.getsize(path) > MAX_SUBTITLE_PROVENANCE_BYTES):
+            return _empty_subtitle_provenance()
+        with open(path, 'rb') as handle:
+            raw = handle.read(MAX_SUBTITLE_PROVENANCE_BYTES + 1)
+        if len(raw) > MAX_SUBTITLE_PROVENANCE_BYTES:
+            return _empty_subtitle_provenance()
+        payload = json.loads(raw.decode('utf-8'))
+    except (OSError, UnicodeError, ValueError, TypeError):
+        return _empty_subtitle_provenance()
+    if (
+            not isinstance(payload, dict)
+            or payload.get('schema') != SUBTITLE_PROVENANCE_SCHEMA
+            or payload.get('kind') != SUBTITLE_PROVENANCE_KIND
+            or not isinstance(payload.get('tracks'), dict)):
+        return _empty_subtitle_provenance()
+    tracks = {
+        language: dict(entry)
+        for language, entry in payload['tracks'].items()
+        if language in ('ja', 'en', 'zh-TW') and isinstance(entry, dict)
+    }
+    return {
+        'schema': SUBTITLE_PROVENANCE_SCHEMA,
+        'kind': SUBTITLE_PROVENANCE_KIND,
+        'tracks': tracks,
+    }
+
+
+def _save_subtitle_provenance(path: str, payload: dict) -> None:
+    tracks = payload.get('tracks') if isinstance(payload, dict) else None
+    if not isinstance(tracks, dict):
+        raise SubtitleError('Subtitle provenance is invalid')
+    safe_payload = {
+        'schema': SUBTITLE_PROVENANCE_SCHEMA,
+        'kind': SUBTITLE_PROVENANCE_KIND,
+        'tracks': {
+            language: entry
+            for language, entry in tracks.items()
+            if language in ('ja', 'en', 'zh-TW')
+            and isinstance(entry, dict)
+        },
+    }
+    encoded = json.dumps(
+        safe_payload,
+        ensure_ascii=True,
+        sort_keys=True,
+        separators=(',', ':'),
+    ) + '\n'
+    if len(encoded.encode('utf-8')) > MAX_SUBTITLE_PROVENANCE_BYTES:
+        raise SubtitleError('Subtitle provenance is too large')
+    _atomic_write_text(path, encoded)
+
+
+def _valid_sha256(value) -> bool:
+    return bool(re.fullmatch(r'[0-9a-f]{64}', str(value or '').lower()))
+
+
+@dataclass(frozen=True)
+class _SubtitleTrackState:
+    status: str
+    sha256: Optional[str] = None
+
+    @property
+    def current(self) -> bool:
+        return self.status in ('manual', 'current')
+
+
+def _subtitle_track_state(
+        language: str, path: str, entry,
+        asr_signature: str,
+        media_identity: str,
+        translation_signature: Optional[str] = None,
+        source_identity: Optional[str] = None,
+) -> _SubtitleTrackState:
+    try:
+        if not os.path.isfile(path) or os.path.getsize(path) <= 0:
+            return _SubtitleTrackState('missing')
+    except OSError:
+        return _SubtitleTrackState('missing')
+    try:
+        actual_sha256 = _sha256(path)
+    except OSError:
+        # An unreadable existing sidecar cannot be proven app-owned. Preserve
+        # it rather than risking replacement of a user-authored subtitle.
+        return _SubtitleTrackState('manual')
+    if (
+            not isinstance(entry, dict)
+            or entry.get('generator') != 'jable'
+            or not _valid_sha256(entry.get('srt_sha256'))
+            or actual_sha256.lower()
+            != str(entry.get('srt_sha256')).lower()):
+        # No trustworthy ownership record means the sidecar may be authored
+        # or edited by the user. It is always preserved.
+        return _SubtitleTrackState('manual', actual_sha256)
+    if not _existing(path):
+        # A malformed file whose bytes still match our manifest is safe to
+        # regenerate; foreign or edited files already returned as manual.
+        return _SubtitleTrackState('stale', actual_sha256)
+    if language == 'ja':
+        status = (
+            'current'
+            if (
+                entry.get('asr_signature') == asr_signature
+                and entry.get('media_identity') == media_identity
+            )
+            else 'stale')
+        return _SubtitleTrackState(status, actual_sha256)
+
+    recorded_source = entry.get('source_identity')
+    if (
+            not recorded_source
+            and entry.get('asr_signature') == asr_signature
+            and entry.get('media_identity') == media_identity):
+        # Compatibility for the first provenance schema written during
+        # prerelease testing.
+        recorded_source = _asr_source_identity(
+            asr_signature, media_identity)
+    status = (
+        'current'
+        if (
+            translation_signature
+            and entry.get('translation_signature')
+            == translation_signature
+            and source_identity
+            and recorded_source == source_identity
+        )
+        else 'stale'
+    )
+    return _SubtitleTrackState(status, actual_sha256)
+
+
+def _record_asr_track(
+        manifest: dict, language: str, path: str,
+        asr_signature: str, media_identity: str,
+) -> None:
+    manifest['tracks'][language] = {
+        'generator': 'jable',
+        'srt_sha256': _sha256(path),
+        'asr_signature': asr_signature,
+        'media_identity': media_identity,
+    }
+
+
+def _record_derived_track(
+        manifest: dict, language: str, path: str,
+        asr_signature: str, media_identity: str,
+        translation_signature: str,
+        source_identity: str, source_sha256: str,
+) -> None:
+    manifest['tracks'][language] = {
+        'generator': 'jable',
+        'srt_sha256': _sha256(path),
+        'asr_signature': asr_signature,
+        'media_identity': media_identity,
+        'translation_signature': translation_signature,
+        'source_identity': source_identity,
+        'source_sha256': source_sha256,
+    }
+
+
 def _existing(path: str) -> bool:
     try:
         if not os.path.isfile(path) or os.path.getsize(path) <= 0:
             return False
-        with open(path, 'r', encoding='utf-8-sig') as handle:
-            return bool(parse_srt(handle.read()))
-    except (OSError, UnicodeError, SubtitleError):
+        return bool(parse_srt(_read_srt_text(path)))
+    except (OSError, SubtitleError):
         return False
+
+
+@contextmanager
+def _generation_slot(cancel_check: Optional[CancelCheck]):
+    acquired = False
+    try:
+        while not acquired:
+            _check_cancel(cancel_check)
+            acquired = _generation_lock.acquire(timeout=0.1)
+        yield
+    finally:
+        if acquired:
+            _generation_lock.release()
 
 
 def generate_subtitles(video_path: str, mode,
@@ -1718,25 +3035,92 @@ def generate_subtitles(video_path: str, mode,
         raise SubtitleError('Downloaded video file was not found')
 
     paths = subtitle_paths(video_path)
+    profile = recognition_profile()
+    asr_signature = _asr_signature(profile)
+    media_identity = _media_identity(video_path)
+    provenance_path = _subtitle_provenance_path(video_path)
     generated: list[str] = []
-    with _generation_lock:
+    with _generation_slot(cancel_check):
         _check_cancel(cancel_check)
-        missing = [language for language in requested if not _existing(paths[language])]
-        if not missing:
-            return SubtitleResult(tuple(paths[language] for language in requested), ())
+        manifest = _load_subtitle_provenance(provenance_path)
+        entries = manifest['tracks']
 
-        _notify(progress_callback, 'queued', None)
-        existing_japanese = paths['ja'] if _existing(paths['ja']) else None
-        existing_english = paths['en'] if _existing(paths['en']) else None
-        translation_profile = (
-            _selected_translation_profile()
-            if 'en' in missing or 'zh-TW' in missing
-            else None
+        ja_state = _subtitle_track_state(
+            'ja', paths['ja'], entries.get('ja'),
+            asr_signature, media_identity)
+        ja_expected_identity = (
+            'file:' + str(ja_state.sha256)
+            if ja_state.status == 'manual'
+            else _asr_source_identity(
+                asr_signature, media_identity)
         )
+
+        # Manual/edited derived tracks never require provider settings merely
+        # to be reused. Missing or app-managed tracks do, because the selected
+        # translation engine is part of freshness.
+        derived_requested = [
+            language for language in requested
+            if language in ('en', 'zh-TW')
+        ]
+        derived_preliminary = {
+            language: _subtitle_track_state(
+                language, paths[language], entries.get(language),
+                asr_signature, media_identity)
+            for language in derived_requested
+        }
+        translation_profile = None
+        translation_signature = None
+        if any(
+                state.status != 'manual'
+                for state in derived_preliminary.values()):
+            translation_profile = _selected_translation_profile()
+            translation_signature = _translation_signature(
+                translation_profile)
         uses_api = bool(
             translation_profile is not None
             and getattr(translation_profile, 'uses_api', False)
         )
+
+        en_state = _subtitle_track_state(
+            'en', paths['en'], entries.get('en'), asr_signature,
+            media_identity, translation_signature, ja_expected_identity)
+        if uses_api or ja_state.current:
+            zh_expected_identity = ja_expected_identity
+        elif en_state.current:
+            zh_expected_identity = 'file:' + str(en_state.sha256)
+        else:
+            zh_expected_identity = _asr_source_identity(
+                asr_signature, media_identity)
+        zh_state = _subtitle_track_state(
+            'zh-TW', paths['zh-TW'], entries.get('zh-TW'), asr_signature,
+            media_identity, translation_signature, zh_expected_identity)
+        states = {
+            'ja': ja_state,
+            'en': en_state,
+            'zh-TW': zh_state,
+        }
+        missing = [
+            language for language in requested
+            if not states[language].current
+        ]
+        if not missing:
+            return SubtitleResult(
+                tuple(paths[language] for language in requested), ())
+
+        # Once an app-managed file's content hash changes, permanently treat
+        # it as user-owned the next time another track writes the manifest.
+        for language, state in states.items():
+            if (
+                    state.status == 'manual'
+                    and isinstance(entries.get(language), dict)
+                    and entries[language].get('generator') == 'jable'):
+                entries.pop(language, None)
+
+        _notify(progress_callback, 'queued', None)
+        existing_japanese = (
+            paths['ja'] if ja_state.current else None)
+        existing_english = (
+            paths['en'] if en_state.current else None)
         need_japanese_source = bool(
             'ja' in missing
             or 'en' in missing
@@ -1745,12 +3129,16 @@ def generate_subtitles(video_path: str, mode,
                 and (uses_api or not existing_english)
             )
         )
-        need_whisper = bool(need_japanese_source and not existing_japanese)
+        need_whisper = bool(
+            need_japanese_source and not existing_japanese)
         exe = model = vad_model = None
         if need_whisper:
-            exe, model, vad_model = _prepare_runtime(
-                progress_callback, cancel_check)
-        with tempfile.TemporaryDirectory(prefix='jable-subtitle-') as temp_dir:
+            with _recognition_profile_scope(profile):
+                exe, model, vad_model = _prepare_runtime(
+                    progress_callback, cancel_check)
+
+        with tempfile.TemporaryDirectory(
+                prefix='jable-subtitle-') as temp_dir:
             wav = os.path.join(temp_dir, 'audio.wav')
             log = os.path.join(temp_dir, 'process.log')
             if need_whisper:
@@ -1758,74 +3146,145 @@ def generate_subtitles(video_path: str, mode,
                 _extract_audio(video_path, wav, log, cancel_check)
 
             japanese_source = existing_japanese
-            need_japanese_pass = need_japanese_source
-            if need_japanese_pass and not japanese_source:
+            japanese_source_identity = (
+                ja_expected_identity if existing_japanese else None)
+            if need_japanese_source and not japanese_source:
                 _notify(progress_callback, 'transcribe_ja', None)
                 japanese_source = _run_whisper(
                     exe, model, vad_model, wav,
                     os.path.join(temp_dir, 'japanese'), log, cancel_check)
+                if not japanese_source:
+                    stale_languages = {
+                        language for language in requested
+                        if states[language].status == 'stale'
+                    }
+                    if (
+                            need_japanese_source
+                            and ja_state.status == 'stale'):
+                        stale_languages.add('ja')
+                    provenance_changed = False
+                    for language in stale_languages:
+                        try:
+                            os.remove(paths[language])
+                        except FileNotFoundError:
+                            pass
+                        except OSError as exc:
+                            raise SubtitleError(
+                                'Obsolete subtitle file could not be removed'
+                            ) from exc
+                        entries.pop(language, None)
+                        provenance_changed = True
+                    if provenance_changed:
+                        _save_subtitle_provenance(
+                            provenance_path, manifest)
+                    _notify(progress_callback, 'done', 100)
+                    return SubtitleResult(
+                        tuple(
+                            paths[language]
+                            for language in requested
+                            if states[language].current
+                        ),
+                        tuple(generated),
+                        no_speech=True,
+                    )
+                japanese_source_identity = _asr_source_identity(
+                    asr_signature, media_identity)
 
             if 'ja' in missing and japanese_source:
                 _atomic_copy(japanese_source, paths['ja'])
                 japanese_source = paths['ja']
+                _record_asr_track(
+                    manifest, 'ja', paths['ja'],
+                    asr_signature, media_identity)
+                _save_subtitle_provenance(
+                    provenance_path, manifest)
                 generated.append(paths['ja'])
 
             with _translation_profile_scope(translation_profile):
                 if 'en' in missing:
-                    if not japanese_source:
+                    if (
+                            not japanese_source
+                            or not japanese_source_identity
+                            or not translation_signature):
                         raise SubtitleError(
                             'Japanese transcription is unavailable')
                     _notify(progress_callback, 'translate_en', None)
+                    source_sha256 = _sha256(japanese_source)
                     try:
                         translate_srt(
                             japanese_source, paths['en'], 'en', 'translate_en',
                             progress_callback, cancel_check)
+                        _record_derived_track(
+                            manifest, 'en', paths['en'],
+                            asr_signature, media_identity,
+                            translation_signature,
+                            japanese_source_identity, source_sha256)
+                        _save_subtitle_provenance(
+                            provenance_path, manifest)
                         generated.append(paths['en'])
+                        existing_english = paths['en']
                     except SubtitleCancelled:
                         raise
                     except Exception:
-                        if not _existing(paths['ja']):
-                            _atomic_copy(japanese_source, paths['ja'])
                         raise
 
                 if 'zh-TW' in missing:
                     english_source = (
                         paths['en']
-                        if _existing(paths['en'])
+                        if paths['en'] in generated
                         else existing_english
                     )
                     if uses_api:
                         # External providers translate Japanese directly to
-                        # the requested target.  They never pivot through an
-                        # English sidecar or initialize the local model pack.
+                        # the target. Video and audio never leave the computer.
                         chinese_source = japanese_source
                         chinese_source_language = 'ja'
+                        chinese_source_identity = japanese_source_identity
                     else:
                         # The local path prefers Japanese so reviewed exact
                         # phrases win, then pivots unknown cues through English.
                         chinese_source = japanese_source or english_source
                         chinese_source_language = (
                             'ja' if japanese_source else 'en')
-                    if not chinese_source:
+                        chinese_source_identity = (
+                            japanese_source_identity
+                            if japanese_source
+                            else (
+                                'file:' + _sha256(english_source)
+                                if english_source else None
+                            )
+                        )
+                    if (
+                            not chinese_source
+                            or not chinese_source_identity
+                            or not translation_signature):
                         raise SubtitleError(
                             'Japanese or English transcription is unavailable')
+                    source_sha256 = _sha256(chinese_source)
                     try:
                         translate_srt_to_zh_tw(
                             chinese_source, paths['zh-TW'],
                             progress_callback, cancel_check,
                             source_language=chinese_source_language)
+                        _record_derived_track(
+                            manifest, 'zh-TW', paths['zh-TW'],
+                            asr_signature, media_identity,
+                            translation_signature,
+                            chinese_source_identity, source_sha256)
+                        _save_subtitle_provenance(
+                            provenance_path, manifest)
                         generated.append(paths['zh-TW'])
                     except SubtitleCancelled:
                         raise
                     except Exception:
-                        # Preserve a useful timestamped fallback if setup or
-                        # inference fails after a fresh transcription.
-                        if japanese_source and not _existing(paths['ja']):
-                            _atomic_copy(japanese_source, paths['ja'])
                         raise
 
         _notify(progress_callback, 'done', 100)
         return SubtitleResult(
-            tuple(paths[language] for language in requested if _existing(paths[language])),
+            tuple(
+                paths[language]
+                for language in requested
+                if _existing(paths[language])
+            ),
             tuple(generated),
         )

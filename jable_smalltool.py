@@ -22,15 +22,6 @@ from dataclasses import dataclass
 from datetime import date, datetime, timezone, timedelta
 from typing import Optional
 
-# Enable DPI awareness (Windows)
-try:
-    ctypes.windll.shcore.SetProcessDpiAwareness(2)
-except Exception:
-    try:
-        ctypes.windll.user32.SetProcessDPIAware()
-    except Exception:
-        pass
-
 # --- issue #23: harden the SSL cert path before curl_cffi (pulled in by M3U8Sites)
 # imports, so a non-UTF-8 OpenSSL/cert default path can't crash startup. ---
 import os as _os, ssl as _ssl
@@ -59,23 +50,93 @@ except Exception:
 
 
 def _run_translation_diagnostic_if_requested():
+    whisper_input = os.environ.get(
+        'JABLE_WHISPER_DIAGNOSTIC_INPUT')
+    whisper_output = os.environ.get(
+        'JABLE_WHISPER_DIAGNOSTIC_OUTPUT')
+    if whisper_input is not None or whisper_output is not None:
+        if not (whisper_input and whisper_input.strip()
+                and whisper_output and whisper_output.strip()):
+            raise SystemExit(2)
+        try:
+            input_path = os.path.abspath(whisper_input)
+            output_path = os.path.abspath(whisper_output)
+            if os.path.normcase(input_path) == os.path.normcase(output_path):
+                raise ValueError('diagnostic input and output must differ')
+            if not os.path.isfile(input_path):
+                raise FileNotFoundError('diagnostic input is not a file')
+            if (os.path.isdir(output_path)
+                    or not os.path.isdir(os.path.dirname(output_path))):
+                raise FileNotFoundError(
+                    'diagnostic output directory is unavailable')
+            try:
+                os.remove(output_path)
+            except FileNotFoundError:
+                pass
+            from subtitle_engine import run_whisper_diagnostic
+            run_whisper_diagnostic(input_path, output_path)
+            if not os.path.isfile(output_path):
+                raise RuntimeError('diagnostic did not produce its report')
+        except (Exception, SystemExit):
+            # Frozen verification is machine-consumed.  Keep failures
+            # deterministic and never echo media paths, transcripts, or keys.
+            raise SystemExit(2) from None
+        raise SystemExit(0)
+
     local_output = os.environ.get(
         'JABLE_LOCAL_TRANSLATION_DIAGNOSTIC_OUTPUT', '')
     if local_output:
-        from subtitle_engine import run_local_translation_diagnostic
-        run_local_translation_diagnostic(local_output)
+        try:
+            output_path = os.path.abspath(local_output.strip())
+            if (os.path.isdir(output_path)
+                    or not os.path.isdir(os.path.dirname(output_path))):
+                raise FileNotFoundError(
+                    'diagnostic output directory is unavailable')
+            try:
+                os.remove(output_path)
+            except FileNotFoundError:
+                pass
+            from subtitle_engine import run_local_translation_diagnostic
+            run_local_translation_diagnostic(output_path)
+            if not os.path.isfile(output_path):
+                raise RuntimeError('diagnostic did not produce its report')
+        except (Exception, SystemExit):
+            raise SystemExit(2) from None
         raise SystemExit(0)
 
     llm_output = os.environ.get(
         'JABLE_LLM_TRANSLATION_DIAGNOSTIC_OUTPUT', '')
     if llm_output:
-        from subtitle_engine import run_llm_translation_diagnostic
-        run_llm_translation_diagnostic(llm_output)
+        try:
+            output_path = os.path.abspath(llm_output.strip())
+            if (os.path.isdir(output_path)
+                    or not os.path.isdir(os.path.dirname(output_path))):
+                raise FileNotFoundError(
+                    'diagnostic output directory is unavailable')
+            try:
+                os.remove(output_path)
+            except FileNotFoundError:
+                pass
+            from subtitle_engine import run_llm_translation_diagnostic
+            run_llm_translation_diagnostic(output_path)
+            if not os.path.isfile(output_path):
+                raise RuntimeError('diagnostic did not produce its report')
+        except (Exception, SystemExit):
+            raise SystemExit(2) from None
         raise SystemExit(0)
 
 
 if __name__ == '__main__':
     _run_translation_diagnostic_if_requested()
+
+# Enable DPI awareness (Windows)
+try:
+    ctypes.windll.shcore.SetProcessDpiAwareness(2)
+except Exception:
+    try:
+        ctypes.windll.user32.SetProcessDPIAware()
+    except Exception:
+        pass
 
 import tkinter as tk
 from tkinter import filedialog, messagebox
@@ -146,7 +207,7 @@ except Exception:
 
 # ── Constants ────────────────────────────────────────────────────────
 APP_NAME = 'Jable_smalltool'
-APP_VERSION = '2.5.34'
+APP_VERSION = '2.5.35'
 DEFAULT_WINDOW_WIDTH = 1180
 DEFAULT_WINDOW_HEIGHT = 780
 MIN_WINDOW_WIDTH = 760
@@ -267,6 +328,11 @@ def _initial_window_size(
     height = min(DEFAULT_WINDOW_HEIGHT, max(
         320, int(work_height) - vertical_margin))
     return width, height
+
+
+def _settings_viewport_height(window_height: int | float) -> int:
+    """Keep advanced settings usable without pushing the main controls away."""
+    return max(104, min(260, int(window_height) - 290))
 
 
 def _logical_work_area(window) -> tuple[int, int]:
@@ -1421,8 +1487,16 @@ class SmallToolWorker:
                             self._stop.is_set()
                             or bool(getattr(site_obj, '_cancel_job', False))),
                     )
-                    self._log(T(
-                        'subtitle_ready', count=len(subtitle_result.files)))
+                    if subtitle_result.no_speech:
+                        self._log(f'  [SUBTITLE] {T("subtitle_no_speech")}')
+                    elif not subtitle_result.files:
+                        self._log(
+                            f'  [SUBTITLE-ERR] '
+                            f'{T("subtitle_failed", error=T("subtitle_empty_result"))}')
+                        return 'subtitle_failed'
+                    else:
+                        self._log(T(
+                            'subtitle_ready', count=len(subtitle_result.files)))
                 except SubtitleCancelled:
                     self._log(f'  [CANCELLED] {T("subtitle_cancelled")}')
                     return
@@ -1698,6 +1772,13 @@ class SmallToolApp(ctk.CTk):
                 check_state = self._check_now_btn.cget('state')
             except tk.TclError:
                 pass
+        categories_collapsed = self._categories_collapsed
+        activity_visible = self._activity_visible
+        if self._settings_expanded:
+            categories_collapsed = getattr(
+                self, '_categories_before_settings', categories_collapsed)
+            activity_visible = getattr(
+                self, '_activity_before_settings', activity_visible)
         return {
             'folder': self._folder_var.get() if hasattr(self, '_folder_var') else self._cfg.get('output_folder', ''),
             'baseline_date': self._date_var.get() if hasattr(self, '_date_var') else self._cfg.get('baseline_date', DEFAULT_BASELINE_DATE),
@@ -1707,13 +1788,14 @@ class SmallToolApp(ctk.CTk):
                 'version_preference', DEFAULT_VERSION_PREFERENCE),
             'subtitle_mode': normalize_subtitle_mode(
                 self._cfg.get('subtitle_mode')),
+            'recognition_quality': config.get_recognition_quality(),
             'running': self._worker.is_running(),
             'check_now_state': check_state,
             'status_key': self._status_key,
             'status_fg': self._status_fg,
-            'categories_collapsed': self._categories_collapsed,
+            'categories_collapsed': categories_collapsed,
             'settings_expanded': self._settings_expanded,
-            'activity_visible': self._activity_visible,
+            'activity_visible': activity_visible,
         }
 
     def _restore_ui_state(self, snapshot: dict):
@@ -1729,6 +1811,8 @@ class SmallToolApp(ctk.CTk):
         self._res_var.set(self._resolution_label())
         self._version_var.set(self._version_label())
         self._subtitle_var.set(self._subtitle_label())
+        self._recognition_quality_var.set(
+            self._recognition_quality_label(snapshot['recognition_quality']))
 
         for var in self._check_vars.values():
             var.set(False)
@@ -1744,8 +1828,8 @@ class SmallToolApp(ctk.CTk):
             self._set_status_key(snapshot['status_key'], snapshot['status_fg'])
         self._check_now_btn.configure(state=snapshot['check_now_state'])
         self._set_categories_collapsed(snapshot['categories_collapsed'])
-        self._set_settings_expanded(snapshot['settings_expanded'])
         self._set_activity_visible(snapshot['activity_visible'])
+        self._set_settings_expanded(snapshot['settings_expanded'])
         self._refresh_schedule_summary()
 
     def _apply_language(self, code: str):
@@ -1845,6 +1929,30 @@ class SmallToolApp(ctk.CTk):
             T('subtitle_all'): 'all',
         }.get(str(label or ''), 'none')
 
+    def _recognition_quality_label(self, quality=None) -> str:
+        quality = (
+            config.get_recognition_quality()
+            if quality is None else str(quality or '').strip().lower())
+        return {
+            'quality': T('recognition_quality_quality'),
+            'balanced': T('recognition_quality_balanced'),
+            'fast': T('recognition_quality_fast'),
+        }.get(quality, T('recognition_quality_quality'))
+
+    def _recognition_quality_values(self) -> list[str]:
+        return [
+            T('recognition_quality_quality'),
+            T('recognition_quality_balanced'),
+            T('recognition_quality_fast'),
+        ]
+
+    def _recognition_quality_from_label(self, label: str) -> str:
+        return {
+            T('recognition_quality_quality'): 'quality',
+            T('recognition_quality_balanced'): 'balanced',
+            T('recognition_quality_fast'): 'fast',
+        }.get(str(label or ''), 'quality')
+
     def _open_translation_settings(self):
         open_translation_settings_dialog(
             self, on_saved=self._refresh_translation_provider_status)
@@ -1886,9 +1994,18 @@ class SmallToolApp(ctk.CTk):
         if event.widget is not self or self._is_closing:
             return
         try:
-            logical_width = event.width / max(self._get_window_scaling(), 1.0)
+            scaling = max(self._get_window_scaling(), 1.0)
+            logical_width = event.width / scaling
+            logical_height = event.height / scaling
         except Exception:
             logical_width = event.width
+            logical_height = event.height
+        if hasattr(self, '_settings_scroll'):
+            try:
+                self._settings_scroll.configure(
+                    height=_settings_viewport_height(logical_height))
+            except (tk.TclError, AttributeError):
+                pass
         columns = category_columns_for_width(logical_width)
         if columns == self._category_columns:
             return
@@ -2015,22 +2132,36 @@ class SmallToolApp(ctk.CTk):
             command=self._toggle_settings)
         self._settings_toggle_btn.pack(side='left', padx=(6, 0))
 
+        settings_scroll = ctk.CTkScrollableFrame(
+            cfg_card,
+            height=_settings_viewport_height(
+                max(self.winfo_height(), MIN_WINDOW_HEIGHT)),
+            fg_color='transparent', corner_radius=0,
+            scrollbar_button_color=BORDER,
+            scrollbar_button_hover_color=BORDER_HOVER)
+        settings_scroll.grid(
+            row=1, column=0, columnspan=3, padx=(8, 4),
+            pady=(0, 10), sticky='ew')
+        settings_scroll.grid_columnconfigure(1, weight=1)
+        self._settings_scroll = settings_scroll
+
         proxy_label = ctk.CTkLabel(
-            cfg_card, text=T('proxy_url_label'), text_color=TEXT_SEC,
+            settings_scroll, text=T('proxy_url_label'), text_color=TEXT_SEC,
             font=(font_family, 11, 'bold'), width=98, anchor='w')
         proxy_label.grid(
-            row=1, column=0, padx=(16, 8), pady=(2, 2), sticky='w')
+            row=0, column=0, padx=(8, 8), pady=(2, 2), sticky='w')
         self._proxy_var = tk.StringVar(value=config.get_proxy_url())
         proxy_entry = ctk.CTkEntry(
-            cfg_card, textvariable=self._proxy_var,
+            settings_scroll, textvariable=self._proxy_var,
             placeholder_text=T('proxy_url_placeholder'), height=34,
             corner_radius=CONTROL_RADIUS, fg_color=BG_INPUT,
             border_color=BORDER, border_width=1,
             text_color=TEXT_PRI, font=(font_family, 10))
         proxy_entry.grid(
-            row=1, column=1, padx=8, pady=(2, 2), sticky='ew')
-        proxy_actions = ctk.CTkFrame(cfg_card, fg_color='transparent')
-        proxy_actions.grid(row=1, column=2, padx=(8, 16), pady=(2, 2))
+            row=0, column=1, padx=8, pady=(2, 2), sticky='ew')
+        proxy_actions = ctk.CTkFrame(
+            settings_scroll, fg_color='transparent')
+        proxy_actions.grid(row=0, column=2, padx=(8, 8), pady=(2, 2))
         ctk.CTkButton(
             proxy_actions, text=T('proxy_save'), width=58, height=34,
             corner_radius=CONTROL_RADIUS, fg_color=ACCENT,
@@ -2053,17 +2184,19 @@ class SmallToolApp(ctk.CTk):
                 side='left', padx=(6, 0))
 
         self._proxy_status_lbl = ctk.CTkLabel(
-            cfg_card, text='', text_color=TEXT_DIM,
+            settings_scroll, text='', text_color=TEXT_DIM,
             font=(font_family, 9), anchor='w')
         self._proxy_status_lbl.grid(
-            row=2, column=1, columnspan=2, padx=8, pady=(0, 4), sticky='w')
+            row=1, column=1, columnspan=2, padx=8, pady=(0, 4), sticky='w')
         self._refresh_proxy_status()
 
-        options = ctk.CTkFrame(cfg_card, fg_color='transparent')
-        options.grid(row=3, column=0, columnspan=3, padx=16, pady=(2, 14), sticky='ew')
+        options = ctk.CTkFrame(settings_scroll, fg_color='transparent')
+        options.grid(
+            row=2, column=0, columnspan=3, padx=8, pady=(2, 8),
+            sticky='ew')
 
         date_group = ctk.CTkFrame(options, fg_color='transparent')
-        date_group.pack(side='left', fill='x', expand=True)
+        date_group.pack(fill='x', expand=True)
         date_controls = ctk.CTkFrame(date_group, fg_color='transparent')
         date_controls.pack(fill='x')
         ctk.CTkLabel(
@@ -2102,7 +2235,7 @@ class SmallToolApp(ctk.CTk):
                 anchor='w', pady=(4, 0))
 
         res_group = ctk.CTkFrame(options, fg_color='transparent')
-        res_group.pack(side='right', padx=(16, 0))
+        res_group.pack(fill='x', pady=(12, 0))
         quality_row = ctk.CTkFrame(res_group, fg_color='transparent')
         quality_row.pack(fill='x')
         ctk.CTkLabel(
@@ -2157,6 +2290,32 @@ class SmallToolApp(ctk.CTk):
             font=(font_family, 9), dropdown_font=(font_family, 9)).pack(
                 side='left')
 
+        recognition_row = ctk.CTkFrame(res_group, fg_color='transparent')
+        recognition_row.pack(fill='x', pady=(6, 0))
+        ctk.CTkLabel(
+            recognition_row, text=T('recognition_quality_setting'),
+            text_color=TEXT_SEC, font=(font_family, 10, 'bold'),
+            width=108, anchor='e').pack(side='left', padx=(0, 8))
+        self._recognition_quality_var = tk.StringVar(
+            value=self._recognition_quality_label())
+        ctk.CTkOptionMenu(
+            recognition_row, variable=self._recognition_quality_var,
+            values=self._recognition_quality_values(),
+            command=self._on_recognition_quality_change,
+            width=178, height=34, corner_radius=CONTROL_RADIUS,
+            fg_color=BG_INPUT, button_color=BORDER_HOVER,
+            button_hover_color=ACCENT, text_color=TEXT_PRI,
+            dropdown_fg_color=BG_CARD,
+            dropdown_hover_color=BG_CARD_HOVER,
+            dropdown_text_color=TEXT_PRI,
+            font=(font_family, 9), dropdown_font=(font_family, 9)).pack(
+                side='left')
+        ctk.CTkLabel(
+            res_group, text=T('recognition_quality_desc'),
+            text_color=TEXT_DIM, font=(font_family, 8),
+            wraplength=286, justify='right').pack(
+                anchor='e', pady=(3, 0))
+
         translation_row = ctk.CTkFrame(res_group, fg_color='transparent')
         translation_row.pack(fill='x', pady=(6, 0))
         ctk.CTkLabel(
@@ -2189,13 +2348,12 @@ class SmallToolApp(ctk.CTk):
         # Apply saved preference immediately (before auto-start)
         from M3U8Sites.M3U8Crawler import set_resolution_pref
         set_resolution_pref(self._cfg.get('resolution', 'highest'))
-        self._settings_widgets = [
-            proxy_label, proxy_entry, proxy_actions,
-            self._proxy_status_lbl, options,
-        ]
+        self._settings_widgets = [settings_scroll]
         for widget in self._settings_widgets:
             widget.grid_remove()
         self._settings_expanded = False
+        self._categories_before_settings = self._categories_collapsed
+        self._activity_before_settings = self._activity_visible
 
         # ── Site / Category selection ───────────────────────────────
         selection = ctk.CTkFrame(
@@ -2462,7 +2620,22 @@ class SmallToolApp(ctk.CTk):
     def _set_settings_expanded(self, expanded: bool):
         if not hasattr(self, '_settings_widgets'):
             return
-        self._settings_expanded = bool(expanded)
+        expanded = bool(expanded)
+        was_expanded = self._settings_expanded
+        if expanded and not was_expanded:
+            self._categories_before_settings = self._categories_collapsed
+            self._activity_before_settings = self._activity_visible
+            self._settings_expanded = True
+            if hasattr(self, '_selection_panel'):
+                try:
+                    self._selection_panel.grid_remove()
+                    self._main_frame.grid_rowconfigure(
+                        1, weight=0, minsize=0)
+                except (tk.TclError, AttributeError):
+                    pass
+            self._set_activity_visible(False)
+        else:
+            self._settings_expanded = expanded
         for widget in self._settings_widgets:
             try:
                 if self._settings_expanded:
@@ -2476,8 +2649,23 @@ class SmallToolApp(ctk.CTk):
                 text=T(
                     'st_settings_collapse' if self._settings_expanded
                     else 'st_settings_expand'))
+        if not expanded and was_expanded:
+            if hasattr(self, '_selection_panel'):
+                try:
+                    self._selection_panel.grid()
+                except (tk.TclError, AttributeError):
+                    pass
+            self._set_categories_collapsed(
+                getattr(self, '_categories_before_settings', False))
+            self._set_activity_visible(
+                getattr(self, '_activity_before_settings', False))
 
     def _toggle_activity(self):
+        if self._settings_expanded:
+            self._set_settings_expanded(False)
+            if not self._activity_visible:
+                self._set_activity_visible(True)
+            return
         self._set_activity_visible(not self._activity_visible)
 
     def _set_activity_visible(self, visible: bool):
@@ -2672,6 +2860,11 @@ class SmallToolApp(ctk.CTk):
 
     # ── Selection helpers ────────────────────────────────────────────
     def _toggle_categories(self):
+        if self._settings_expanded:
+            self._set_settings_expanded(False)
+            if self._categories_collapsed:
+                self._set_categories_collapsed(False)
+            return
         self._set_categories_collapsed(not self._categories_collapsed)
 
     def _set_categories_collapsed(self, collapsed: bool):
@@ -3069,6 +3262,12 @@ class SmallToolApp(ctk.CTk):
     def _on_subtitle_change(self, val):
         self._cfg['subtitle_mode'] = self._subtitle_pref_from_label(val)
         update_config({'subtitle_mode': self._cfg['subtitle_mode']})
+
+    def _on_recognition_quality_change(self, val):
+        quality = config.set_recognition_quality(
+            self._recognition_quality_from_label(val))
+        self._recognition_quality_var.set(
+            self._recognition_quality_label(quality))
 
     def _auto_start_worker(self):
         if not self._is_closing:
