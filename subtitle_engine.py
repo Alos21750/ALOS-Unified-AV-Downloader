@@ -623,6 +623,11 @@ def _verify_whisper_install(
             WHISPER_RUNTIME_FILES.items()):
         _check_cancel(cancel_check)
         path = os.path.join(folder, *relative_path.split('/'))
+        # Native executables are security-sensitive and small enough to hash
+        # on every install check.  Windows can preserve size and timestamps
+        # across a rapid same-length overwrite, so the metadata cache alone
+        # cannot safely prove that these files are unchanged.
+        _verified_paths.pop(os.path.abspath(path), None)
         if not _is_verified(
                 path, expected_size, expected_sha256, cancel_check):
             return None
