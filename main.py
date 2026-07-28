@@ -125,7 +125,8 @@ except Exception:
     except Exception:
         pass
 
-from args import *
+from args import av_recommand, get_parser
+import M3U8Sites
 
 # Use modern CustomTkinter GUI by default; fall back to basic tkinter if unavailable
 try:
@@ -134,13 +135,6 @@ try:
 except ImportError:
     from gui import gui_main as _gui_main
     _USE_MODERN = False
-
-''' Default folder to save the download files
-    "" or None : same as the url's last stem,  ie:  "abc-001" for url = "https://jable.tv/videos/abc-001/"
-    others : relative to the current folder, or an absolute path  
-    '''
-save_folder = "download"
-
 
 if __name__ == "__main__":
     url_arg = ""
@@ -153,11 +147,11 @@ if __name__ == "__main__":
         url_arg = av_recommand() or ""   # None (site changed/blocked) -> empty, not a crash
 
     if args.nogui:
-        M3U8Sites.consoles_main(url_arg, save_folder)
+        M3U8Sites.consoles_main(url_arg, args.output)
     elif _USE_MODERN:
-        _gui_main(url_arg, save_folder)
+        _gui_main(url_arg, args.output)
     else:
         from gui import gui_main
-        gui_main(url_arg, save_folder)
+        gui_main(url_arg, args.output)
 
     sys.exit(0)

@@ -128,9 +128,12 @@ python main.py
 # Category monitor
 python jable_smalltool.py
 
-# One URL, no GUI
-python main.py --nogui --url "https://jable.tv/videos/example/"
+# One URL, no GUI, with an explicit output directory
+python main.py --nogui --url "https://jable.tv/videos/example/" --output "/path/to/downloads"
 ```
+
+`-o` is the short form of `--output`. If omitted, downloads are saved under
+`./download`.
 
 On Linux, install `python3-tk` with your system package manager if Tk is not already available. macOS and Linux run from source; the portable EXE release is for Windows.
 

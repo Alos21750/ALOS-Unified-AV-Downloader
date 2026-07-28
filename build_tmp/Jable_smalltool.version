@@ -1,8 +1,8 @@
 # UTF-8
 VSVersionInfo(
   ffi=FixedFileInfo(
-    filevers=(2, 5, 35, 0),
-    prodvers=(2, 5, 35, 0),
+    filevers=(2, 5, 36, 0),
+    prodvers=(2, 5, 36, 0),
     mask=0x3f,
     flags=0x0,
     OS=0x40004,
@@ -15,11 +15,11 @@ VSVersionInfo(
       StringTable('040904B0', [
         StringStruct('CompanyName', 'ALOS (Alos21750)'),
         StringStruct('FileDescription', 'JableTV, MissAV & SupJav Batch Download Tool'),
-        StringStruct('FileVersion', '2.5.35.0'),
+        StringStruct('FileVersion', '2.5.36.0'),
         StringStruct('InternalName', 'Jable_smalltool'),
         StringStruct('OriginalFilename', 'Jable_smalltool.exe'),
         StringStruct('ProductName', 'JableTV, MissAV & SupJav Downloader'),
-        StringStruct('ProductVersion', '2.5.35.0')
+        StringStruct('ProductVersion', '2.5.36.0')
       ])
     ]),
     VarFileInfo([VarStruct('Translation', [1033, 1200])])

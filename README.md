@@ -128,9 +128,11 @@ python main.py
 # 自動監控工具
 python jable_smalltool.py
 
-# 單一網址、無 GUI
-python main.py --nogui --url "https://jable.tv/videos/example/"
+# 單一網址、無 GUI，並指定下載位置
+python main.py --nogui --url "https://jable.tv/videos/example/" --output "/path/to/downloads"
 ```
+
+`-o` 是 `--output` 的縮寫；若省略，預設會儲存在 `./download`。
 
 Linux 若未內建 Tk，請先用系統套件管理器安裝 `python3-tk`。macOS／Linux 是原始碼執行方式；Windows Release 才提供免安裝 EXE。
 
