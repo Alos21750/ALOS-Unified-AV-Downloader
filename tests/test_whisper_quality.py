@@ -378,9 +378,10 @@ def test_batch_runner_uses_short_cwd_and_reads_every_expected_json(
 
     def fake_run(
             args, log_path, cancel_check, cwd=None,
-            disk_guard_path=None):
+            disk_guard_path=None, **kwargs):
         calls.append((
-            list(args), log_path, cancel_check, cwd, disk_guard_path))
+            list(args), log_path, cancel_check, cwd, disk_guard_path,
+            kwargs))
         for name in names:
             (tmp_path / f'{name}.json').write_text(
                 json.dumps(_cli_payload(_cli_segment(0, 500))),
@@ -395,6 +396,45 @@ def test_batch_runner_uses_short_cwd_and_reads_every_expected_json(
     assert calls[0][3] == str(tmp_path)
     assert calls[0][4] == str(tmp_path)
     assert calls[0][0].count('-f') == 2
+    assert calls[0][5]['stall_timeout_seconds'] > 0
+    assert callable(calls[0][5]['heartbeat_callback'])
+
+
+def test_whisper_batch_reports_real_progress_before_process_returns(
+        monkeypatch, tmp_path):
+    names = ['island-00000.wav', 'island-00001.wav']
+    progress = []
+
+    def fake_run(*_args, **kwargs):
+        heartbeat = kwargs['heartbeat_callback']
+        heartbeat()
+        (tmp_path / f'{names[0]}.json').write_text(
+            json.dumps(_cli_payload(_cli_segment(0, 500))),
+            encoding='utf-8',
+        )
+        heartbeat()
+        (tmp_path / f'{names[1]}.json').write_text(
+            json.dumps(_cli_payload(_cli_segment(0, 500))),
+            encoding='utf-8',
+        )
+        heartbeat()
+
+    monkeypatch.setattr(subtitles, '_run_process', fake_run)
+    payloads = subtitles._run_whisper_cli_batch(
+        'whisper-cli.exe', 'model.bin', str(tmp_path), names, 0, None,
+        total_windows=2,
+        batch_audio_seconds=10,
+        progress_callback=lambda stage, percent: progress.append(
+            (stage, percent)),
+    )
+
+    assert len(payloads) == 2
+    assert progress[:3] == [
+        ('transcribe_ja', 0),
+        ('transcribe_ja', 50),
+        ('transcribe_ja', 99),
+    ]
+    assert progress[-1] == ('transcribe_ja', 99)
 
 
 def test_run_process_cancellation_terminates_child(monkeypatch, tmp_path):
@@ -429,6 +469,54 @@ def test_run_process_cancellation_terminates_child(monkeypatch, tmp_path):
     assert state['terminated'] is True
 
 
+def test_run_process_stall_timeout_terminates_child_and_reports_heartbeat(
+        monkeypatch, tmp_path):
+    state = {'terminated': False, 'clock': 0.0}
+    heartbeats = []
+
+    class StalledProcess:
+        returncode = None
+
+        def poll(self):
+            return self.returncode
+
+        def terminate(self):
+            state['terminated'] = True
+            self.returncode = -15
+
+        def wait(self, timeout=None):
+            return self.returncode
+
+        def kill(self):
+            self.returncode = -9
+
+    def monotonic():
+        state['clock'] += 0.6
+        return state['clock']
+
+    monkeypatch.setattr(
+        subtitles.subprocess, 'Popen',
+        lambda *_args, **_kwargs: StalledProcess())
+    monkeypatch.setattr(subtitles.time, 'monotonic', monotonic)
+    monkeypatch.setattr(subtitles.time, 'sleep', lambda _seconds: None)
+
+    with pytest.raises(
+            subtitles.SubtitleProcessTimeout,
+            match='stopped responding'):
+        subtitles._run_process(
+            ['whisper-cli.exe'],
+            str(tmp_path / 'process.log'),
+            None,
+            cwd=str(tmp_path),
+            stall_timeout_seconds=1.0,
+            progress_probe=lambda: 0,
+            heartbeat_callback=lambda: heartbeats.append(state['clock']),
+        )
+
+    assert state['terminated'] is True
+    assert heartbeats
+
+
 def test_asr_temp_space_guard_keeps_a_reserve(monkeypatch, tmp_path):
     class Usage:
         free = subtitles.ASR_TEMP_RESERVE_BYTES + 1023
@@ -461,7 +549,7 @@ def test_zero_vad_windows_returns_no_speech_and_cleans_temp(
 
     monkeypatch.setattr(subtitles.tempfile, 'mkdtemp', fake_mkdtemp)
     monkeypatch.setattr(
-        subtitles, '_run_external_vad', lambda *_args: [])
+        subtitles, '_run_external_vad', lambda *_args, **_kwargs: [])
     result = subtitles._run_whisper(
         str(cli), 'model.bin', 'vad.bin', str(wav),
         str(tmp_path / 'output'), str(tmp_path / 'old.log'), None)
@@ -491,12 +579,12 @@ def test_speech_with_no_valid_cues_raises_and_cleans_temp(
     monkeypatch.setattr(
         subtitles,
         '_run_external_vad',
-        lambda *_args: [subtitles.SpeechIsland(0.2, 1.0)],
+        lambda *_args, **_kwargs: [subtitles.SpeechIsland(0.2, 1.0)],
     )
     monkeypatch.setattr(
         subtitles,
         '_run_whisper_cli_batch',
-        lambda *_args: [_cli_payload()],
+        lambda *_args, **_kwargs: [_cli_payload()],
     )
     with pytest.raises(subtitles.SubtitleError, match='no valid'):
         subtitles._run_whisper(
@@ -518,7 +606,7 @@ def test_repeated_utterances_in_separate_windows_are_not_deduplicated(
     monkeypatch.setattr(
         subtitles,
         '_run_external_vad',
-        lambda *_args: [
+        lambda *_args, **_kwargs: [
             subtitles.SpeechIsland(1.0, 2.0),
             subtitles.SpeechIsland(30.0, 31.0),
         ],
@@ -526,7 +614,7 @@ def test_repeated_utterances_in_separate_windows_are_not_deduplicated(
     monkeypatch.setattr(
         subtitles,
         '_run_whisper_cli_batch',
-        lambda *_args: [
+        lambda *_args, **_kwargs: [
             _cli_payload(_cli_segment(100, 500, '同じ言葉')),
             _cli_payload(_cli_segment(100, 500, '同じ言葉')),
         ],
@@ -551,7 +639,9 @@ def test_generate_reports_no_speech_without_hallucinated_sidecars(
     monkeypatch.setattr(
         subtitles, '_extract_audio',
         lambda _video, wav, _log, _cancel: open(wav, 'wb').close())
-    monkeypatch.setattr(subtitles, '_run_whisper', lambda *_args: None)
+    monkeypatch.setattr(
+        subtitles, '_run_whisper',
+        lambda *_args, **_kwargs: None)
 
     result = subtitles.generate_subtitles(str(video), 'ja')
 
@@ -640,7 +730,8 @@ def test_stale_app_generated_japanese_is_retranscribed(
         subtitles, '_extract_audio',
         lambda _video, wav, _log, _cancel: open(wav, 'wb').close())
 
-    def fake_whisper(_exe, _model, _vad, _wav, output, _log, _cancel):
+    def fake_whisper(
+            _exe, _model, _vad, _wav, output, _log, _cancel, **_kwargs):
         calls.append('transcribed')
         path = output + '.srt'
         subtitles._atomic_write_text(path, _valid_srt('新字幕'))
@@ -677,7 +768,8 @@ def test_profile_change_invalidates_app_generated_derived_subtitle(
         subtitles, '_extract_audio',
         lambda _video, wav, _log, _cancel: open(wav, 'wb').close())
 
-    def fake_whisper(_exe, _model, _vad, _wav, output, _log, _cancel):
+    def fake_whisper(
+            _exe, _model, _vad, _wav, output, _log, _cancel, **_kwargs):
         calls.append('transcribed')
         path = output + '.srt'
         subtitles._atomic_write_text(path, _valid_srt('新しい字幕'))

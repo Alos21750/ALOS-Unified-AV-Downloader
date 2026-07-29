@@ -19,7 +19,9 @@ def test_managed_asr_is_reused_until_downloaded_media_changes(
         subtitles, '_extract_audio',
         lambda _source, wav, _log, _cancel: open(wav, 'wb').close())
 
-    def fake_whisper(_exe, _model, _vad, _wav, output, _log, _cancel):
+    def fake_whisper(
+            _exe, _model, _vad, _wav, output, _log, _cancel,
+            progress_callback=None):
         calls.append(len(calls) + 1)
         result = output + '.srt'
         subtitles._atomic_write_text(
@@ -124,7 +126,9 @@ def test_no_speech_removes_only_an_obsolete_app_owned_sidecar(
         lambda _source, wav, _log, _cancel: open(wav, 'wb').close())
     pass_count = {'value': 0}
 
-    def fake_whisper(_exe, _model, _vad, _wav, output, _log, _cancel):
+    def fake_whisper(
+            _exe, _model, _vad, _wav, output, _log, _cancel,
+            progress_callback=None):
         pass_count['value'] += 1
         if pass_count['value'] == 2:
             return None

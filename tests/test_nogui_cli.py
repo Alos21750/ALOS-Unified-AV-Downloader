@@ -69,6 +69,9 @@ def test_nogui_entrypoint_imports_downloader_and_forwards_output(
     monkeypatch.delenv(
         'JABLE_LOCAL_TRANSLATION_DIAGNOSTIC_OUTPUT', raising=False)
     monkeypatch.delenv(
+        'JABLE_LOCAL_TRANSLATION_SOAK_DIAGNOSTIC_OUTPUT',
+        raising=False)
+    monkeypatch.delenv(
         'JABLE_LLM_TRANSLATION_DIAGNOSTIC_OUTPUT', raising=False)
 
     with pytest.raises(SystemExit) as caught:

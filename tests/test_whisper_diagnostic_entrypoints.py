@@ -25,6 +25,8 @@ def _install_safe_modules(monkeypatch, diagnostic):
     fake_engine = types.ModuleType('subtitle_engine')
     fake_engine.run_whisper_diagnostic = diagnostic
     fake_engine.run_local_translation_diagnostic = lambda _output: None
+    fake_engine.run_local_translation_worker_soak_diagnostic = (
+        lambda _output: None)
     fake_engine.run_llm_translation_diagnostic = lambda _output: None
     fake_crashlog = types.ModuleType('crashlog')
     fake_crashlog.install = lambda: None
@@ -47,6 +49,9 @@ def _reject_gui_imports(monkeypatch):
 def _clear_other_diagnostics(monkeypatch):
     monkeypatch.delenv(
         'JABLE_LOCAL_TRANSLATION_DIAGNOSTIC_OUTPUT', raising=False)
+    monkeypatch.delenv(
+        'JABLE_LOCAL_TRANSLATION_SOAK_DIAGNOSTIC_OUTPUT',
+        raising=False)
     monkeypatch.delenv(
         'JABLE_LLM_TRANSLATION_DIAGNOSTIC_OUTPUT', raising=False)
 
@@ -176,6 +181,10 @@ def test_whisper_diagnostic_cannot_reuse_a_stale_report(
         (
             'JABLE_LOCAL_TRANSLATION_DIAGNOSTIC_OUTPUT',
             'run_local_translation_diagnostic',
+        ),
+        (
+            'JABLE_LOCAL_TRANSLATION_SOAK_DIAGNOSTIC_OUTPUT',
+            'run_local_translation_worker_soak_diagnostic',
         ),
         (
             'JABLE_LLM_TRANSLATION_DIAGNOSTIC_OUTPUT',

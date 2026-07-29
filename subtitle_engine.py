@@ -14,6 +14,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import multiprocessing
 import os
 import re
 import secrets
@@ -204,6 +205,15 @@ MAX_SRT_FILE_BYTES = 32 * 1024 * 1024
 WHISPER_SAMPLE_RATE = 16_000
 WHISPER_BATCH_SIZE = 180
 ASR_TEMP_RESERVE_BYTES = 64 * 1024 * 1024
+SUBTITLE_PROCESS_HEARTBEAT_SECONDS = 1.0
+AUDIO_EXTRACTION_TIMEOUT_SECONDS = 30 * 60
+VAD_MIN_TIMEOUT_SECONDS = 5 * 60
+WHISPER_MIN_TIMEOUT_SECONDS = 15 * 60
+WHISPER_STALL_TIMEOUT_SECONDS = 15 * 60
+LOCAL_TRANSLATION_WORKER_SCHEMA = 1
+LOCAL_TRANSLATION_WORKER_MAX_BYTES = 64 * 1024 * 1024
+LOCAL_TRANSLATION_WORKER_TIMEOUT_SECONDS = 2 * 60 * 60
+LOCAL_TRANSLATION_WORKER_STALL_TIMEOUT_SECONDS = 15 * 60
 ASR_PIPELINE_VERSION = 'whisper-cpp-v1.9.1-external-vad-context-batch-v4'
 SUBTITLE_PROVENANCE_SCHEMA = 1
 SUBTITLE_PROVENANCE_KIND = 'jable_subtitle_provenance'
@@ -213,6 +223,7 @@ _RECOGNITION_DEFAULT = object()
 
 ProgressCallback = Callable[[str, Optional[int]], None]
 CancelCheck = Callable[[], bool]
+TranslationProgressCallback = Callable[[int, int], None]
 
 _runtime_lock = threading.Lock()
 _generation_lock = threading.Lock()
@@ -229,6 +240,10 @@ class SubtitleError(RuntimeError):
 
 class SubtitleCancelled(SubtitleError):
     """Raised when the owning download job is cancelled."""
+
+
+class SubtitleProcessTimeout(SubtitleError):
+    """Raised when a supervised native subtitle process stops responding."""
 
 
 class SubtitleStorageError(SubtitleError):
@@ -783,7 +798,13 @@ def _ensure_asr_temp_space(path: str, additional_bytes: int = 0) -> None:
 def _run_process(args: list[str], log_path: str,
                  cancel_check: Optional[CancelCheck],
                  cwd: Optional[str] = None,
-                 disk_guard_path: Optional[str] = None) -> None:
+                 disk_guard_path: Optional[str] = None,
+                 *,
+                 timeout_seconds: Optional[float] = None,
+                 stall_timeout_seconds: Optional[float] = None,
+                 progress_probe: Optional[Callable[[], object]] = None,
+                 heartbeat_callback: Optional[Callable[[], None]] = None,
+                 ) -> None:
     creationflags = getattr(subprocess, 'CREATE_NO_WINDOW', 0) if os.name == 'nt' else 0
     if disk_guard_path:
         _ensure_asr_temp_space(disk_guard_path)
@@ -800,15 +821,15 @@ def _run_process(args: list[str], log_path: str,
         except (OSError, ValueError) as exc:
             raise SubtitleError('Subtitle process could not start') from exc
         try:
-            next_disk_check = 0.0
-            while process.poll() is None:
-                if cancel_check and cancel_check():
-                    raise SubtitleCancelled('Subtitle generation cancelled')
-                now = time.monotonic()
-                if disk_guard_path and now >= next_disk_check:
-                    _ensure_asr_temp_space(disk_guard_path)
-                    next_disk_check = now + 0.5
-                time.sleep(0.05)
+            _wait_for_process(
+                process,
+                cancel_check,
+                timeout_seconds=timeout_seconds,
+                stall_timeout_seconds=stall_timeout_seconds,
+                progress_probe=progress_probe,
+                heartbeat_callback=heartbeat_callback,
+                disk_guard_path=disk_guard_path,
+            )
             if process.returncode != 0:
                 raise SubtitleError(
                     f'Subtitle process exited with code {process.returncode}')
@@ -828,7 +849,8 @@ def _extract_audio(video_path: str, wav_path: str, log_path: str,
             '-i', video_path, '-vn', '-ac', '1', '-ar', '16000',
             '-c:a', 'pcm_s16le', wav_path,
         ], log_path, cancel_check,
-            disk_guard_path=os.path.dirname(wav_path))
+            disk_guard_path=os.path.dirname(wav_path),
+            timeout_seconds=AUDIO_EXTRACTION_TIMEOUT_SECONDS)
     except SubtitleCancelled:
         raise
     except SubtitleStorageError:
@@ -1087,6 +1109,78 @@ def _terminate_process(process) -> None:
         pass
 
 
+def _wait_for_process(
+        process,
+        cancel_check: Optional[CancelCheck],
+        *,
+        timeout_seconds: Optional[float] = None,
+        stall_timeout_seconds: Optional[float] = None,
+        progress_probe: Optional[Callable[[], object]] = None,
+        heartbeat_callback: Optional[Callable[[], None]] = None,
+        disk_guard_path: Optional[str] = None,
+) -> None:
+    """Wait for a native helper while keeping cancellation and liveness bounded."""
+    started = time.monotonic()
+    last_progress = started
+    next_heartbeat = started
+    next_disk_check = started
+    missing_probe = object()
+    previous_probe = missing_probe
+
+    while process.poll() is None:
+        if cancel_check and cancel_check():
+            raise SubtitleCancelled('Subtitle generation cancelled')
+
+        now = time.monotonic()
+        if disk_guard_path and now >= next_disk_check:
+            _ensure_asr_temp_space(disk_guard_path)
+            next_disk_check = now + 0.5
+
+        if progress_probe is not None:
+            try:
+                current_probe = progress_probe()
+            except (OSError, ValueError):
+                current_probe = previous_probe
+            if previous_probe is missing_probe:
+                previous_probe = current_probe
+            elif current_probe != previous_probe:
+                previous_probe = current_probe
+                last_progress = now
+
+        if heartbeat_callback is not None and now >= next_heartbeat:
+            heartbeat_callback()
+            next_heartbeat = now + SUBTITLE_PROCESS_HEARTBEAT_SECONDS
+
+        if (
+                timeout_seconds is not None
+                and now - started >= max(0.05, float(timeout_seconds))):
+            raise SubtitleProcessTimeout(
+                'Subtitle process stopped responding')
+        if (
+                stall_timeout_seconds is not None
+                and now - last_progress
+                >= max(0.05, float(stall_timeout_seconds))):
+            raise SubtitleProcessTimeout(
+                'Subtitle process stopped responding')
+        time.sleep(0.05)
+
+
+def _vad_timeout_seconds(audio_duration: Optional[float]) -> float:
+    try:
+        duration = max(0.0, float(audio_duration or 0.0))
+    except (TypeError, ValueError, OverflowError):
+        duration = 0.0
+    return max(float(VAD_MIN_TIMEOUT_SECONDS), duration * 2.0 + 120.0)
+
+
+def _whisper_timeout_seconds(audio_duration: Optional[float]) -> float:
+    try:
+        duration = max(0.0, float(audio_duration or 0.0))
+    except (TypeError, ValueError, OverflowError):
+        duration = 0.0
+    return max(float(WHISPER_MIN_TIMEOUT_SECONDS), duration * 10.0 + 300.0)
+
+
 def _asr_failure(
         category: str, log_path: Optional[str] = None) -> SubtitleError:
     evidence = ''
@@ -1131,6 +1225,8 @@ def _read_file_bounded(path: str, limit: int) -> bytes:
 def _run_external_vad(
         vad_exe: str, vad_model: str, wav_path: str, work_dir: str,
         cancel_check: Optional[CancelCheck],
+        audio_duration: Optional[float] = None,
+        progress_callback: Optional[ProgressCallback] = None,
 ) -> list[SpeechIsland]:
     output_path = os.path.join(work_dir, 'vad-output.txt')
     log_path = os.path.join(work_dir, 'vad.log')
@@ -1165,11 +1261,25 @@ def _run_external_vad(
                 )
             except (OSError, ValueError) as exc:
                 raise _asr_failure('runtime', log_path) from exc
-            while process.poll() is None:
-                if cancel_check and cancel_check():
-                    _terminate_process(process)
-                    raise SubtitleCancelled('Subtitle generation cancelled')
-                time.sleep(0.05)
+
+            def _progress_probe():
+                sizes = []
+                for path in (output_path, log_path):
+                    try:
+                        sizes.append(os.path.getsize(path))
+                    except OSError:
+                        sizes.append(-1)
+                return tuple(sizes)
+
+            _wait_for_process(
+                process,
+                cancel_check,
+                timeout_seconds=_vad_timeout_seconds(audio_duration),
+                stall_timeout_seconds=WHISPER_STALL_TIMEOUT_SECONDS,
+                progress_probe=_progress_probe,
+                heartbeat_callback=lambda: _notify(
+                    progress_callback, 'transcribe_ja', 0),
+            )
         if process.returncode != 0:
             raise _asr_failure('runtime', log_path)
         try:
@@ -1392,11 +1502,36 @@ def _run_whisper_cli_batch(
         exe: str, model: str, work_dir: str,
         relative_wavs: list[str], batch_index: int,
         cancel_check: Optional[CancelCheck],
+        *,
+        completed_offset: int = 0,
+        total_windows: Optional[int] = None,
+        batch_audio_seconds: Optional[float] = None,
+        progress_callback: Optional[ProgressCallback] = None,
 ) -> list[dict]:
     if not relative_wavs or len(relative_wavs) > WHISPER_BATCH_SIZE:
         raise SubtitleError(
             'Speech recognition runtime received an invalid batch')
     log_path = os.path.join(work_dir, f'batch-{batch_index:05d}.log')
+
+    def _completed_count() -> int:
+        return sum(
+            os.path.isfile(os.path.join(work_dir, name + '.json'))
+            for name in relative_wavs
+        )
+
+    total = max(
+        len(relative_wavs),
+        int(total_windows or len(relative_wavs)),
+    )
+
+    def _report_progress() -> None:
+        completed = min(len(relative_wavs), _completed_count())
+        absolute = min(total, max(0, int(completed_offset)) + completed)
+        # The final 100% notification belongs to generate_subtitles after the
+        # output has been parsed and written atomically.
+        percent = min(99, int(absolute * 100 / total))
+        _notify(progress_callback, 'transcribe_ja', percent)
+
     try:
         _run_process(
             _whisper_cli_batch_args(exe, model, relative_wavs),
@@ -1404,8 +1539,15 @@ def _run_whisper_cli_batch(
             cancel_check,
             cwd=work_dir,
             disk_guard_path=work_dir,
+            timeout_seconds=_whisper_timeout_seconds(batch_audio_seconds),
+            stall_timeout_seconds=WHISPER_STALL_TIMEOUT_SECONDS,
+            progress_probe=_completed_count,
+            heartbeat_callback=_report_progress,
         )
+        _report_progress()
     except SubtitleCancelled:
+        raise
+    except SubtitleProcessTimeout:
         raise
     except SubtitleError as exc:
         raise _asr_failure('runtime', log_path) from exc
@@ -1431,7 +1573,9 @@ def _format_srt_timestamp(seconds: float) -> str:
 
 def _run_whisper(exe: str, model: str, vad_model: str, wav_path: str,
                  output_base: str, log_path: str,
-                 cancel_check: Optional[CancelCheck]) -> Optional[str]:
+                 cancel_check: Optional[CancelCheck],
+                 progress_callback: Optional[ProgressCallback] = None,
+                 ) -> Optional[str]:
     del log_path  # All ASR logs live only in the private per-run temp folder.
     runtime_dir = os.path.dirname(os.path.abspath(exe))
     vad_exe = os.path.join(
@@ -1446,7 +1590,9 @@ def _run_whisper(exe: str, model: str, vad_model: str, wav_path: str,
     try:
         total_frames, audio_duration = _validate_pcm16_wav(wav_path)
         islands = _run_external_vad(
-            vad_exe, vad_model, wav_path, work_dir, cancel_check)
+            vad_exe, vad_model, wav_path, work_dir, cancel_check,
+            audio_duration=audio_duration,
+            progress_callback=progress_callback)
         clamped: list[SpeechIsland] = []
         for island in islands:
             if island.start > audio_duration + 0.5:
@@ -1462,6 +1608,7 @@ def _run_whisper(exe: str, model: str, vad_model: str, wav_path: str,
         if not islands:
             return None
         windows = _build_recognition_windows(islands, audio_duration)
+        _notify(progress_callback, 'transcribe_ja', 0)
         slice_bytes = sum(
             (
                 max(
@@ -1506,7 +1653,12 @@ def _run_whisper(exe: str, model: str, vad_model: str, wav_path: str,
                 batch_start + WHISPER_BATCH_SIZE, len(relative_wavs))
             batch_names = relative_wavs[batch_start:batch_end]
             payloads = _run_whisper_cli_batch(
-                exe, model, work_dir, batch_names, batch_index, cancel_check)
+                exe, model, work_dir, batch_names, batch_index, cancel_check,
+                completed_offset=batch_start,
+                total_windows=len(relative_wavs),
+                batch_audio_seconds=sum(
+                    window_durations[batch_start:batch_end]),
+                progress_callback=progress_callback)
             if len(payloads) != len(batch_names):
                 raise _asr_failure('runtime')
             for offset, payload in enumerate(payloads):
@@ -1541,6 +1693,7 @@ def _run_whisper(exe: str, model: str, vad_model: str, wav_path: str,
             _atomic_write_text(result, render_srt(srt_cues))
         except OSError as exc:
             raise _asr_failure('runtime') from exc
+        _notify(progress_callback, 'transcribe_ja', 100)
         return result
     finally:
         shutil.rmtree(work_dir, ignore_errors=True)
@@ -2005,10 +2158,57 @@ def _restore_terminal_punctuation(
     return result
 
 
-def _run_local_model(
+def _load_translation_worker_json(path: str, limit: int) -> object:
+    try:
+        with open(path, 'rb') as handle:
+            encoded = handle.read(limit + 1)
+    except OSError as exc:
+        raise SubtitleError(
+            'Local translation worker data is unavailable') from exc
+    if len(encoded) > limit:
+        raise SubtitleError('Local translation worker returned too much data')
+    try:
+        return json.loads(encoded.decode('utf-8', errors='strict'))
+    except (UnicodeError, json.JSONDecodeError) as exc:
+        raise SubtitleError(
+            'Local translation worker returned invalid data') from exc
+
+
+def _validate_translation_worker_request(
+        payload: object) -> tuple[str, list[str], Optional[str]]:
+    if not isinstance(payload, dict) or set(payload) != {
+            'schema', 'model_dir', 'texts', 'target_token'}:
+        raise SubtitleError('Local translation worker request is invalid')
+    if (
+            type(payload.get('schema')) is not int
+            or payload['schema'] != LOCAL_TRANSLATION_WORKER_SCHEMA):
+        raise SubtitleError('Local translation worker request is invalid')
+    model_dir = payload.get('model_dir')
+    texts = payload.get('texts')
+    target_token = payload.get('target_token')
+    if (
+            not isinstance(model_dir, str)
+            or not model_dir.strip()
+            or not os.path.isabs(model_dir)
+            or not os.path.isdir(model_dir)):
+        raise SubtitleError('Local translation model is unavailable')
+    if (
+            not isinstance(texts, list)
+            or len(texts) > MAX_WHISPER_CUES
+            or any(not isinstance(text, str) for text in texts)):
+        raise SubtitleError('Local translation worker request is invalid')
+    if target_token not in (None, '>>cmn_Hant<<'):
+        raise SubtitleError('Local translation worker request is invalid')
+    return os.path.abspath(model_dir), list(texts), target_token
+
+
+def _run_local_model_in_process(
         model_dir: str, texts: list[str],
         target_token: Optional[str],
-        cancel_check: Optional[CancelCheck]) -> list[str]:
+        cancel_check: Optional[CancelCheck],
+        progress_callback: Optional[TranslationProgressCallback] = None,
+) -> list[str]:
+    """Run CTranslate2 inside the disposable translation worker process."""
     _check_cancel(cancel_check)
     try:
         import ctranslate2
@@ -2046,7 +2246,8 @@ def _run_local_model(
         _check_cancel(cancel_check)
         translated: list[str] = []
         # Smaller independent batches keep cancellation responsive without
-        # materially reducing CPU throughput for subtitle-sized cues.
+        # materially reducing CPU throughput for subtitle-sized cues.  The
+        # parent also treats each completed batch as watchdog progress.
         batch_size = 16
         for start in range(0, len(texts), batch_size):
             _check_cancel(cancel_check)
@@ -2079,12 +2280,300 @@ def _run_local_model(
                     and not re.fullmatch(r'>>[^<>]+<<', token)
                 ]
                 translated.append(target_processor.decode(tokens).strip())
+            if progress_callback:
+                progress_callback(
+                    min(start + len(batch), len(texts)), len(texts))
         return translated
     except SubtitleError:
         raise
     except Exception as exc:
         raise SubtitleError(
             f'Local translation failed: {type(exc).__name__}') from exc
+
+
+def _local_translation_worker_entry(
+        request_path: str, result_path: str, progress_path: str) -> None:
+    """Multiprocessing target with a bounded, file-based IPC contract."""
+    try:
+        payload = _load_translation_worker_json(
+            request_path, LOCAL_TRANSLATION_WORKER_MAX_BYTES)
+        model_dir, texts, target_token = (
+            _validate_translation_worker_request(payload))
+
+        def report_progress(completed: int, total: int) -> None:
+            _atomic_write_text(
+                progress_path,
+                json.dumps(
+                    {
+                        'schema': LOCAL_TRANSLATION_WORKER_SCHEMA,
+                        'completed': int(completed),
+                        'total': int(total),
+                    },
+                    ensure_ascii=True,
+                    sort_keys=True,
+                    separators=(',', ':'),
+                ) + '\n',
+            )
+
+        translations = _run_local_model_in_process(
+            model_dir, texts, target_token, None, report_progress)
+        result = {
+            'schema': LOCAL_TRANSLATION_WORKER_SCHEMA,
+            'ok': True,
+            'translations': translations,
+        }
+    except BaseException as exc:
+        if isinstance(exc, SubtitleError):
+            message = str(exc).strip()
+        else:
+            message = (
+                f'Local translation worker failed: '
+                f'{type(exc).__name__}')
+        if not message or len(message) > 300:
+            message = 'Local translation worker failed'
+        result = {
+            'schema': LOCAL_TRANSLATION_WORKER_SCHEMA,
+            'ok': False,
+            'error': message,
+        }
+    try:
+        encoded_result = json.dumps(
+            result,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(',', ':'),
+        ) + '\n'
+        if (
+                len(encoded_result.encode('utf-8'))
+                > LOCAL_TRANSLATION_WORKER_MAX_BYTES):
+            encoded_result = json.dumps(
+                {
+                    'schema': LOCAL_TRANSLATION_WORKER_SCHEMA,
+                    'ok': False,
+                    'error': 'Local translation worker returned too much data',
+                },
+                ensure_ascii=True,
+                sort_keys=True,
+                separators=(',', ':'),
+            ) + '\n'
+        _atomic_write_text(result_path, encoded_result)
+    except BaseException:
+        # The parent treats a missing or malformed result as a worker failure.
+        return
+
+
+def _translation_worker_progress(
+        path: str, expected_total: int,
+) -> Optional[tuple[int, int]]:
+    try:
+        payload = _load_translation_worker_json(path, 4096)
+    except SubtitleError:
+        return None
+    if not isinstance(payload, dict) or set(payload) != {
+            'schema', 'completed', 'total'}:
+        return None
+    schema = payload.get('schema')
+    completed = payload.get('completed')
+    total = payload.get('total')
+    if (
+            type(schema) is not int
+            or schema != LOCAL_TRANSLATION_WORKER_SCHEMA
+            or type(completed) is not int
+            or type(total) is not int
+            or total != expected_total
+            or completed < 0
+            or completed > total):
+        return None
+    return completed, total
+
+
+def _terminate_translation_worker(process) -> bool:
+    try:
+        alive = process.is_alive()
+    except (AssertionError, OSError, ValueError):
+        return False
+    if alive:
+        try:
+            process.terminate()
+        except (AttributeError, OSError, ValueError):
+            pass
+        try:
+            process.join(5)
+        except (AssertionError, OSError, ValueError):
+            pass
+    try:
+        alive = process.is_alive()
+    except (AssertionError, OSError, ValueError):
+        return False
+    if alive:
+        try:
+            process.kill()
+        except (AttributeError, OSError, ValueError):
+            pass
+        try:
+            process.join(5)
+        except (AssertionError, OSError, ValueError):
+            pass
+    try:
+        return not process.is_alive()
+    except (AssertionError, OSError, ValueError):
+        return False
+
+
+def _validate_translation_worker_result(
+        path: str, expected_count: int) -> list[str]:
+    payload = _load_translation_worker_json(
+        path, LOCAL_TRANSLATION_WORKER_MAX_BYTES)
+    if (
+            not isinstance(payload, dict)
+            or type(payload.get('schema')) is not int
+            or payload.get('schema') != LOCAL_TRANSLATION_WORKER_SCHEMA
+            or type(payload.get('ok')) is not bool):
+        raise SubtitleError(
+            'Local translation worker returned invalid data')
+    if not payload['ok']:
+        if set(payload) != {'schema', 'ok', 'error'}:
+            raise SubtitleError(
+                'Local translation worker returned invalid data')
+        message = payload.get('error')
+        if not isinstance(message, str) or not message or len(message) > 300:
+            raise SubtitleError('Local translation worker failed')
+        raise SubtitleError(message)
+    if set(payload) != {'schema', 'ok', 'translations'}:
+        raise SubtitleError(
+            'Local translation worker returned invalid data')
+    translations = payload.get('translations')
+    if (
+            not isinstance(translations, list)
+            or len(translations) != expected_count
+            or any(not isinstance(text, str) for text in translations)):
+        raise SubtitleError(
+            'Local translation worker returned invalid data')
+    return list(translations)
+
+
+def _run_local_model(
+        model_dir: str, texts: list[str],
+        target_token: Optional[str],
+        cancel_check: Optional[CancelCheck],
+        progress_callback: Optional[TranslationProgressCallback] = None,
+) -> list[str]:
+    """Run one model request in a supervised, disposable child process.
+
+    CTranslate2 retains native allocator reservations after a Translator is
+    destroyed on Windows.  SmallTool processes many videos sequentially, so
+    rebuilding translators in the GUI process caused private memory to grow
+    on every video.  The OS now reclaims the complete native runtime when this
+    one-shot worker exits, and the parent can terminate a stalled inference.
+    """
+    _check_cancel(cancel_check)
+    model_dir = os.path.abspath(model_dir)
+    if not os.path.isdir(model_dir):
+        raise SubtitleError('Local translation model is unavailable')
+    if (
+            not isinstance(texts, list)
+            or len(texts) > MAX_WHISPER_CUES
+            or any(not isinstance(text, str) for text in texts)
+            or target_token not in (None, '>>cmn_Hant<<')):
+        raise SubtitleError('Local translation worker request is invalid')
+
+    work_dir = tempfile.mkdtemp(prefix='jable-translation-worker-')
+    request_path = os.path.join(work_dir, 'request.json')
+    result_path = os.path.join(work_dir, 'result.json')
+    progress_path = os.path.join(work_dir, 'progress.json')
+    process = None
+    started = False
+    worker_stopped = True
+    try:
+        request = {
+            'schema': LOCAL_TRANSLATION_WORKER_SCHEMA,
+            'model_dir': model_dir,
+            'texts': texts,
+            'target_token': target_token,
+        }
+        encoded = json.dumps(
+            request,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(',', ':'),
+        ) + '\n'
+        if len(encoded.encode('utf-8')) > LOCAL_TRANSLATION_WORKER_MAX_BYTES:
+            raise SubtitleError(
+                'Local translation worker request is too large')
+        _atomic_write_text(request_path, encoded)
+
+        try:
+            context = multiprocessing.get_context('spawn')
+            process = context.Process(
+                target=_local_translation_worker_entry,
+                args=(request_path, result_path, progress_path),
+            )
+            process.start()
+            started = True
+        except (OSError, RuntimeError, TypeError, ValueError) as exc:
+            started = bool(
+                process is not None
+                and getattr(process, 'pid', None) is not None)
+            raise SubtitleError(
+                'Local translation worker could not start') from exc
+        began_at = time.monotonic()
+        last_activity = began_at
+        next_heartbeat = began_at
+        last_progress: Optional[tuple[int, int]] = None
+        while process.is_alive():
+            _check_cancel(cancel_check)
+            now = time.monotonic()
+            progress = _translation_worker_progress(
+                progress_path, len(texts))
+            if progress is not None and progress != last_progress:
+                last_progress = progress
+                last_activity = now
+                if progress_callback:
+                    progress_callback(*progress)
+            if now >= next_heartbeat:
+                if progress_callback:
+                    progress_callback(
+                        *(last_progress or (0, len(texts))))
+                next_heartbeat = (
+                    now + SUBTITLE_PROCESS_HEARTBEAT_SECONDS)
+            if (
+                    now - began_at
+                    > LOCAL_TRANSLATION_WORKER_TIMEOUT_SECONDS):
+                raise SubtitleProcessTimeout(
+                    'Local subtitle translation exceeded its time limit')
+            if (
+                    now - last_activity
+                    > LOCAL_TRANSLATION_WORKER_STALL_TIMEOUT_SECONDS):
+                raise SubtitleProcessTimeout(
+                    'Local subtitle translation stopped responding')
+            process.join(0.1)
+
+        process.join()
+        if process.exitcode != 0:
+            raise SubtitleError(
+                'Local translation worker exited unexpectedly')
+        translations = _validate_translation_worker_result(
+            result_path, len(texts))
+        if progress_callback:
+            progress_callback(len(texts), len(texts))
+        return translations
+    finally:
+        if process is not None and started:
+            worker_stopped = _terminate_translation_worker(process)
+            try:
+                if worker_stopped:
+                    process.close()
+            except (AttributeError, AssertionError, OSError, ValueError):
+                pass
+        if worker_stopped:
+            shutil.rmtree(work_dir, ignore_errors=True)
+        else:
+            # A still-running child may still be reading its request or
+            # writing progress.  Preserve that IPC directory instead of
+            # racing deletion against the orphan and report a deterministic
+            # failure to the owning subtitle job.
+            raise SubtitleError(
+                'Local translation worker could not be stopped')
 
 
 @lru_cache(maxsize=1)
@@ -2159,10 +2648,15 @@ def _translate_direct(
         model_key = 'ja-en' if source_language == 'ja' else 'en-zh'
         target_token = (
             '>>cmn_Hant<<' if target_language == 'zh-TW' else None)
+
+        def report_model_progress(completed: int, total: int) -> None:
+            percent = 0 if total <= 0 else int(completed * 80 / total)
+            _notify(progress_callback, progress_stage, percent)
+
         model_outputs = _run_local_model(
             models[model_key],
             [representative[source] for source in misses],
-            target_token, cancel_check)
+            target_token, cancel_check, report_model_progress)
         if len(model_outputs) != len(misses):
             raise SubtitleError(
                 'Local translation model returned the wrong cue count')
@@ -2189,7 +2683,7 @@ def _translate_direct(
         output.append(_validate_translation(source, translated))
         _notify(
             progress_callback, progress_stage,
-            int((index + 1) * 100 / len(normalized)))
+            80 + int((index + 1) * 20 / len(normalized)))
     return output
 
 
@@ -2606,6 +3100,129 @@ def run_local_translation_diagnostic(destination_path: str) -> dict:
     _atomic_write_text(
         destination,
         json.dumps(payload, ensure_ascii=False, sort_keys=True) + '\n')
+    return payload
+
+
+def _translation_soak_process_metrics() -> dict[str, int]:
+    """Return Windows parent-process metrics for frozen soak evidence."""
+    if os.name != 'nt':
+        raise SubtitleError(
+            'Local translation soak diagnostic requires Windows')
+    try:
+        import ctypes
+
+        class ProcessMemoryCountersEx(ctypes.Structure):
+            _fields_ = [
+                ('cb', ctypes.c_ulong),
+                ('PageFaultCount', ctypes.c_ulong),
+                ('PeakWorkingSetSize', ctypes.c_size_t),
+                ('WorkingSetSize', ctypes.c_size_t),
+                ('QuotaPeakPagedPoolUsage', ctypes.c_size_t),
+                ('QuotaPagedPoolUsage', ctypes.c_size_t),
+                ('QuotaPeakNonPagedPoolUsage', ctypes.c_size_t),
+                ('QuotaNonPagedPoolUsage', ctypes.c_size_t),
+                ('PagefileUsage', ctypes.c_size_t),
+                ('PeakPagefileUsage', ctypes.c_size_t),
+                ('PrivateUsage', ctypes.c_size_t),
+            ]
+
+        kernel32 = ctypes.windll.kernel32
+        psapi = ctypes.windll.psapi
+        kernel32.GetCurrentProcess.restype = ctypes.c_void_p
+        kernel32.GetProcessHandleCount.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(ctypes.c_ulong),
+        ]
+        kernel32.GetProcessHandleCount.restype = ctypes.c_bool
+        psapi.GetProcessMemoryInfo.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(ProcessMemoryCountersEx),
+            ctypes.c_ulong,
+        ]
+        psapi.GetProcessMemoryInfo.restype = ctypes.c_bool
+        process = kernel32.GetCurrentProcess()
+        counters = ProcessMemoryCountersEx()
+        counters.cb = ctypes.sizeof(counters)
+        if not psapi.GetProcessMemoryInfo(
+                process, ctypes.byref(counters), counters.cb):
+            raise ctypes.WinError()
+        handle_count = ctypes.c_ulong()
+        if not kernel32.GetProcessHandleCount(
+                process, ctypes.byref(handle_count)):
+            raise ctypes.WinError()
+        return {
+            'working_set_bytes': int(counters.WorkingSetSize),
+            'private_bytes': int(counters.PrivateUsage),
+            'handles': int(handle_count.value),
+        }
+    except (AttributeError, OSError, TypeError, ValueError) as exc:
+        raise SubtitleError(
+            'Local translation soak metrics are unavailable') from exc
+
+
+def run_local_translation_worker_soak_diagnostic(
+        destination_path: str, iterations: int = 20) -> dict:
+    """Exercise many one-shot native workers in one frozen parent process."""
+    if not str(destination_path or '').strip():
+        raise SubtitleError(
+            'Local translation soak diagnostic output path is required')
+    if (
+            type(iterations) is not int
+            or iterations < 1
+            or iterations > 25):
+        raise SubtitleError(
+            'Local translation soak diagnostic iteration count is invalid')
+    destination = os.path.abspath(
+        os.path.expanduser(str(destination_path).strip()))
+    models = _prepare_translation_runtime(None, None)
+    rows = []
+    for job in range(1, iterations + 1):
+        started = time.perf_counter()
+        english = _run_local_model(
+            models['ja-en'],
+            [f'これは字幕の連続テスト {job} です。'],
+            None,
+            None,
+        )
+        taiwan = _run_local_model(
+            models['en-zh'],
+            [f'This is sequential subtitle test number {job}.'],
+            '>>cmn_Hant<<',
+            None,
+        )
+        if (
+                len(english) != 1
+                or len(taiwan) != 1
+                or not english[0]
+                or not taiwan[0]):
+            raise SubtitleError(
+                'Local translation soak worker returned invalid output')
+        try:
+            temp_worker_dirs = sum(
+                name.startswith('jable-translation-worker-')
+                and os.path.isdir(os.path.join(tempfile.gettempdir(), name))
+                for name in os.listdir(tempfile.gettempdir())
+            )
+        except OSError:
+            temp_worker_dirs = -1
+        rows.append({
+            'job': job,
+            'elapsed_ms': int(
+                (time.perf_counter() - started) * 1000),
+            **_translation_soak_process_metrics(),
+            'temp_worker_dirs': int(temp_worker_dirs),
+        })
+    payload = {
+        'schema': 1,
+        'kind': 'jable_local_translation_worker_soak',
+        'frozen': bool(getattr(sys, 'frozen', False)),
+        'iterations': iterations,
+        'worker_cycles': iterations * 2,
+        'rows': rows,
+    }
+    _atomic_write_text(
+        destination,
+        json.dumps(payload, ensure_ascii=True, sort_keys=True) + '\n')
     return payload
 
 
@@ -3157,7 +3774,8 @@ def generate_subtitles(video_path: str, mode,
                 _notify(progress_callback, 'transcribe_ja', None)
                 japanese_source = _run_whisper(
                     exe, model, vad_model, wav,
-                    os.path.join(temp_dir, 'japanese'), log, cancel_check)
+                    os.path.join(temp_dir, 'japanese'), log, cancel_check,
+                    progress_callback=progress_callback)
                 if not japanese_source:
                     stale_languages = {
                         language for language in requested

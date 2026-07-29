@@ -3,7 +3,14 @@
 # coding: utf-8
 
 import ctypes
+import multiprocessing
 import sys
+
+if __name__ == '__main__':
+    # PyInstaller replaces this with an early child-process dispatcher.  It
+    # must run before SSL, crash logging, Tk, or crawler imports so the local
+    # translation worker never starts a second GUI.
+    multiprocessing.freeze_support()
 
 # --- issue #23: on some Windows machines the OpenSSL/cert default path contains
 # non-UTF-8 bytes, so ssl.get_default_verify_paths() raises (UnicodeDecodeError ->
@@ -85,6 +92,29 @@ def _run_translation_diagnostic_if_requested():
                 pass
             from subtitle_engine import run_local_translation_diagnostic
             run_local_translation_diagnostic(output_path)
+            if not _os.path.isfile(output_path):
+                raise RuntimeError('diagnostic did not produce its report')
+        except (Exception, SystemExit):
+            raise SystemExit(2) from None
+        raise SystemExit(0)
+
+    local_soak_output = _os.environ.get(
+        'JABLE_LOCAL_TRANSLATION_SOAK_DIAGNOSTIC_OUTPUT', '')
+    if local_soak_output:
+        try:
+            output_path = _os.path.abspath(local_soak_output.strip())
+            if (_os.path.isdir(output_path)
+                    or not _os.path.isdir(_os.path.dirname(output_path))):
+                raise FileNotFoundError(
+                    'diagnostic output directory is unavailable')
+            try:
+                _os.remove(output_path)
+            except FileNotFoundError:
+                pass
+            from subtitle_engine import (
+                run_local_translation_worker_soak_diagnostic,
+            )
+            run_local_translation_worker_soak_diagnostic(output_path)
             if not _os.path.isfile(output_path):
                 raise RuntimeError('diagnostic did not produce its report')
         except (Exception, SystemExit):

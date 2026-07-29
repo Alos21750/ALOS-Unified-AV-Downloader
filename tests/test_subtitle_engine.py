@@ -133,7 +133,8 @@ def test_translate_cues_uses_exact_domain_rules_and_dedupes_model_work(
         lambda _progress, _cancel: {'ja-en': 'ja-model', 'en-zh': 'zh-model'})
     calls = []
 
-    def fake_model(model_dir, texts, target_token, _cancel):
+    def fake_model(
+            model_dir, texts, target_token, _cancel, _progress=None):
         calls.append((model_dir, list(texts), target_token))
         return ['Unknown line.' for _ in texts]
 
@@ -169,7 +170,8 @@ def test_japanese_to_chinese_pivot_keeps_raw_english_model_casing(
         lambda _progress, _cancel: {'ja-en': 'ja-model', 'en-zh': 'zh-model'})
     calls = []
 
-    def fake_model(model_dir, texts, target_token, _cancel):
+    def fake_model(
+            model_dir, texts, target_token, _cancel, _progress=None):
         calls.append((model_dir, list(texts), target_token))
         if model_dir == 'ja-model':
             return ["i'm ready to start"]
@@ -192,7 +194,8 @@ def test_translate_cues_pivots_unknown_japanese_to_taiwan_chinese(
         lambda _progress, _cancel: {'ja-en': 'ja-model', 'en-zh': 'zh-model'})
     calls = []
 
-    def fake_model(model_dir, texts, target_token, _cancel):
+    def fake_model(
+            model_dir, texts, target_token, _cancel, _progress=None):
         calls.append((model_dir, list(texts), target_token))
         if model_dir == 'ja-model':
             return ['This is a test.' for _ in texts]
@@ -234,6 +237,346 @@ def test_local_model_honours_cancel_before_loading_runtime():
             cancel_check=lambda: True)
 
 
+def test_local_model_isolates_each_job_in_a_fresh_worker(
+        monkeypatch, tmp_path):
+    model_dir = tmp_path / 'model'
+    model_dir.mkdir()
+    (model_dir / 'source.spm').write_bytes(b'source tokenizer')
+    (model_dir / 'target.spm').write_bytes(b'target tokenizer')
+    processes = []
+
+    class FakeProcess:
+        def __init__(self, *, target, args):
+            self.target = target
+            self.args = args
+            self.exitcode = None
+            self.alive = False
+            self.terminated = False
+            self.closed = False
+            processes.append(self)
+
+        def start(self):
+            self.alive = True
+            request_path, result_path, progress_path = self.args
+            payload = json.loads(
+                open(request_path, encoding='utf-8').read())
+            subtitles._atomic_write_text(
+                progress_path,
+                json.dumps({
+                    'schema': 1,
+                    'completed': len(payload['texts']),
+                    'total': len(payload['texts']),
+                }))
+            subtitles._atomic_write_text(
+                result_path,
+                json.dumps({
+                    'schema': 1,
+                    'ok': True,
+                    'translations': list(payload['texts']),
+                }))
+            self.alive = False
+            self.exitcode = 0
+
+        def is_alive(self):
+            return self.alive
+
+        def join(self, _timeout=None):
+            return None
+
+        def terminate(self):
+            self.terminated = True
+            self.alive = False
+            self.exitcode = -15
+
+        def kill(self):
+            self.terminate()
+
+        def close(self):
+            self.closed = True
+
+    class FakeContext:
+        Process = FakeProcess
+
+    monkeypatch.setattr(
+        subtitles.multiprocessing, 'get_context',
+        lambda method: FakeContext() if method == 'spawn' else None)
+
+    for job in range(20):
+        assert subtitles._run_local_model(
+            str(model_dir), [f'job {job}'], None, None) == [f'job {job}']
+
+    assert len(processes) == 20
+    assert all(
+        process.exitcode == 0
+        and not process.terminated
+        and process.closed
+        for process in processes
+    )
+
+
+def test_local_translation_worker_executes_model_and_reports_progress(
+        monkeypatch, tmp_path):
+    model_dir = tmp_path / 'model'
+    model_dir.mkdir()
+    (model_dir / 'source.spm').write_bytes(b'source tokenizer')
+    (model_dir / 'target.spm').write_bytes(b'target tokenizer')
+    request_path = tmp_path / 'request.json'
+    result_path = tmp_path / 'result.json'
+    progress_path = tmp_path / 'progress.json'
+
+    class FakeProcessor:
+        def __init__(self, *, model_file):
+            assert os.path.isfile(model_file)
+
+        def encode(self, text, *, out_type):
+            assert out_type is str
+            return [str(text)]
+
+        def decode(self, tokens):
+            return ' '.join(tokens)
+
+    class FakeTranslator:
+        def __init__(self, path, **_kwargs):
+            assert path == os.path.abspath(model_dir)
+
+        def translate_batch(self, batches, **_kwargs):
+            return [
+                SimpleNamespace(hypotheses=[list(tokens)])
+                for tokens in batches
+            ]
+
+    monkeypatch.setitem(
+        sys.modules, 'sentencepiece',
+        SimpleNamespace(SentencePieceProcessor=FakeProcessor))
+    monkeypatch.setitem(
+        sys.modules, 'ctranslate2',
+        SimpleNamespace(Translator=FakeTranslator))
+    request_path.write_text(json.dumps({
+        'schema': subtitles.LOCAL_TRANSLATION_WORKER_SCHEMA,
+        'model_dir': os.path.abspath(model_dir),
+        'texts': ['first', 'second'],
+        'target_token': None,
+    }), encoding='utf-8')
+
+    subtitles._local_translation_worker_entry(
+        str(request_path), str(result_path), str(progress_path))
+
+    result = json.loads(result_path.read_text(encoding='utf-8'))
+    progress = json.loads(progress_path.read_text(encoding='utf-8'))
+    assert result == {
+        'schema': subtitles.LOCAL_TRANSLATION_WORKER_SCHEMA,
+        'ok': True,
+        'translations': ['first', 'second'],
+    }
+    assert progress == {
+        'schema': subtitles.LOCAL_TRANSLATION_WORKER_SCHEMA,
+        'completed': 2,
+        'total': 2,
+    }
+
+
+def test_local_translation_worker_caps_result_before_writing(
+        monkeypatch, tmp_path):
+    model_dir = tmp_path / 'model'
+    model_dir.mkdir()
+    request_path = tmp_path / 'request.json'
+    result_path = tmp_path / 'result.json'
+    progress_path = tmp_path / 'progress.json'
+    request_path.write_text(json.dumps({
+        'schema': subtitles.LOCAL_TRANSLATION_WORKER_SCHEMA,
+        'model_dir': os.path.abspath(model_dir),
+        'texts': ['cue'],
+        'target_token': None,
+    }), encoding='utf-8')
+    monkeypatch.setattr(
+        subtitles, 'LOCAL_TRANSLATION_WORKER_MAX_BYTES', 512)
+    monkeypatch.setattr(
+        subtitles, '_run_local_model_in_process',
+        lambda *_args, **_kwargs: ['x' * 1024])
+
+    subtitles._local_translation_worker_entry(
+        str(request_path), str(result_path), str(progress_path))
+
+    result = json.loads(result_path.read_text(encoding='utf-8'))
+    assert result == {
+        'schema': subtitles.LOCAL_TRANSLATION_WORKER_SCHEMA,
+        'ok': False,
+        'error': 'Local translation worker returned too much data',
+    }
+    assert result_path.stat().st_size <= 512
+
+
+def test_local_model_cancel_terminates_worker_and_removes_ipc(
+        monkeypatch, tmp_path):
+    model_dir = tmp_path / 'model'
+    model_dir.mkdir()
+    created_dirs = []
+    processes = []
+
+    class StalledProcess:
+        exitcode = None
+
+        def __init__(self, *, target, args):
+            del target
+            self.args = args
+            self.alive = False
+            self.terminated = False
+            self.closed = False
+            processes.append(self)
+
+        def start(self):
+            self.alive = True
+            created_dirs.append(os.path.dirname(self.args[0]))
+
+        def is_alive(self):
+            return self.alive
+
+        def join(self, _timeout=None):
+            return None
+
+        def terminate(self):
+            self.terminated = True
+            self.alive = False
+            self.exitcode = -15
+
+        def kill(self):
+            self.terminate()
+
+        def close(self):
+            self.closed = True
+
+    class FakeContext:
+        Process = StalledProcess
+
+    monkeypatch.setattr(
+        subtitles.multiprocessing, 'get_context',
+        lambda _method: FakeContext())
+    checks = iter((False, True))
+
+    with pytest.raises(subtitles.SubtitleCancelled):
+        subtitles._run_local_model(
+            str(model_dir), ['cue'], None,
+            lambda: next(checks, True))
+
+    assert len(processes) == 1
+    assert processes[0].terminated
+    assert processes[0].closed
+    assert created_dirs and not os.path.exists(created_dirs[0])
+
+
+def test_local_model_timeout_terminates_worker(
+        monkeypatch, tmp_path):
+    model_dir = tmp_path / 'model'
+    model_dir.mkdir()
+    processes = []
+
+    class StalledProcess:
+        exitcode = None
+
+        def __init__(self, *, target, args):
+            del target, args
+            self.alive = False
+            self.terminated = False
+            self.closed = False
+            processes.append(self)
+
+        def start(self):
+            self.alive = True
+
+        def is_alive(self):
+            return self.alive
+
+        def join(self, _timeout=None):
+            return None
+
+        def terminate(self):
+            self.terminated = True
+            self.alive = False
+            self.exitcode = -15
+
+        def kill(self):
+            self.terminate()
+
+        def close(self):
+            self.closed = True
+
+    class FakeContext:
+        Process = StalledProcess
+
+    monkeypatch.setattr(
+        subtitles.multiprocessing, 'get_context',
+        lambda _method: FakeContext())
+    monkeypatch.setattr(
+        subtitles, 'LOCAL_TRANSLATION_WORKER_TIMEOUT_SECONDS', -1)
+
+    with pytest.raises(
+            subtitles.SubtitleProcessTimeout,
+            match='exceeded its time limit'):
+        subtitles._run_local_model(
+            str(model_dir), ['cue'], None, None)
+
+    assert len(processes) == 1
+    assert processes[0].terminated
+    assert processes[0].closed
+
+
+def test_local_model_preserves_ipc_if_worker_cannot_be_stopped(
+        monkeypatch, tmp_path):
+    model_dir = tmp_path / 'model'
+    model_dir.mkdir()
+    created_dirs = []
+
+    class UnstoppableProcess:
+        exitcode = None
+
+        def __init__(self, *, target, args):
+            del target
+            self.args = args
+            self.alive = False
+
+        def start(self):
+            self.alive = True
+            created_dirs.append(os.path.dirname(self.args[0]))
+
+        def is_alive(self):
+            return self.alive
+
+        def join(self, _timeout=None):
+            return None
+
+        def terminate(self):
+            return None
+
+        def kill(self):
+            return None
+
+        def close(self):
+            pytest.fail('a live worker handle must not be closed')
+
+    class FakeContext:
+        Process = UnstoppableProcess
+
+    monkeypatch.setattr(
+        subtitles.multiprocessing, 'get_context',
+        lambda _method: FakeContext())
+    monkeypatch.setattr(
+        subtitles, 'LOCAL_TRANSLATION_WORKER_TIMEOUT_SECONDS', -1)
+
+    try:
+        with pytest.raises(
+                subtitles.SubtitleError,
+                match='could not be stopped'):
+            subtitles._run_local_model(
+                str(model_dir), ['cue'], None, None)
+
+        assert len(created_dirs) == 1
+        assert os.path.isdir(created_dirs[0])
+        assert os.path.isfile(os.path.join(created_dirs[0], 'request.json'))
+    finally:
+        for path in created_dirs:
+            shutil.rmtree(path, ignore_errors=True)
+
+
 def test_local_translation_memory_is_exact_and_versioned(
         monkeypatch, tmp_path):
     monkeypatch.setenv('LOCALAPPDATA', str(tmp_path))
@@ -245,7 +588,8 @@ def test_local_translation_memory_is_exact_and_versioned(
         lambda _progress, _cancel: {'ja-en': 'ja-model', 'en-zh': 'zh-model'})
     model_calls = []
 
-    def fake_model(_model_dir, texts, _target_token, _cancel):
+    def fake_model(
+            _model_dir, texts, _target_token, _cancel, _progress=None):
         model_calls.append(list(texts))
         return ['A cached translation.' for _ in texts]
 
@@ -291,7 +635,8 @@ def test_invalid_translation_memory_row_falls_back_to_model(
         lambda _progress, _cancel: {'ja-en': 'ja-model', 'en-zh': 'zh-model'})
     calls = []
 
-    def fake_model(_model_dir, texts, _target_token, _cancel):
+    def fake_model(
+            _model_dir, texts, _target_token, _cancel, _progress=None):
         calls.append(list(texts))
         return ['Valid replacement.']
 
@@ -336,7 +681,8 @@ def test_chinese_stage_reuses_prior_english_model_result(
         lambda _progress, _cancel: {'ja-en': 'ja-model', 'en-zh': 'zh-model'})
     calls = []
 
-    def fake_model(model_dir, texts, target_token, _cancel):
+    def fake_model(
+            model_dir, texts, target_token, _cancel, _progress=None):
         calls.append((model_dir, list(texts), target_token))
         if model_dir == 'ja-model':
             return ['Previously translated.' for _ in texts]
@@ -363,7 +709,8 @@ def test_model_dedupe_keeps_terminal_punctuation_input_order_independent(
         lambda _progress, _cancel: {'ja-en': 'ja-model', 'en-zh': 'zh-model'})
     calls = []
 
-    def fake_model(_model_dir, texts, _target_token, _cancel):
+    def fake_model(
+            _model_dir, texts, _target_token, _cancel, _progress=None):
         calls.append(list(texts))
         return ['Translated' for _ in texts]
 
@@ -417,6 +764,56 @@ def test_local_translation_diagnostic_writes_complete_atomic_evidence(
     assert json.loads(output.read_text(encoding='utf-8')) == payload
     assert not list(tmp_path.glob('*.tmp'))
     assert [call[2] for call in calls] == ['en', 'zh-TW']
+
+
+def test_local_translation_worker_soak_diagnostic_runs_one_parent_cycle(
+        monkeypatch, tmp_path):
+    calls = []
+    monkeypatch.setattr(
+        subtitles, '_prepare_translation_runtime',
+        lambda _progress, _cancel: {
+            'ja-en': 'ja-model',
+            'en-zh': 'zh-model',
+        })
+
+    def fake_model(model_dir, texts, target_token, cancel_check):
+        calls.append((
+            model_dir, list(texts), target_token, cancel_check))
+        return ['translated']
+
+    metric_calls = []
+
+    def fake_metrics():
+        metric_calls.append(len(metric_calls) + 1)
+        return {
+            'working_set_bytes': 40_000_000,
+            'private_bytes': 30_000_000,
+            'handles': 240,
+        }
+
+    monkeypatch.setattr(subtitles, '_run_local_model', fake_model)
+    monkeypatch.setattr(
+        subtitles, '_translation_soak_process_metrics', fake_metrics)
+    output = tmp_path / 'worker-soak.json'
+
+    payload = subtitles.run_local_translation_worker_soak_diagnostic(
+        str(output), iterations=3)
+
+    assert payload['kind'] == 'jable_local_translation_worker_soak'
+    assert payload['iterations'] == 3
+    assert payload['worker_cycles'] == 6
+    assert [row['job'] for row in payload['rows']] == [1, 2, 3]
+    assert all(
+        row['private_bytes'] == 30_000_000
+        and row['handles'] == 240
+        for row in payload['rows'])
+    assert len(calls) == 6
+    assert [call[0] for call in calls] == [
+        'ja-model', 'zh-model',
+        'ja-model', 'zh-model',
+        'ja-model', 'zh-model',
+    ]
+    assert json.loads(output.read_text(encoding='utf-8')) == payload
 
 
 def test_llm_translation_diagnostic_uses_api_branch_and_redacts_evidence(
@@ -677,7 +1074,9 @@ def test_generate_all_creates_three_selectable_sidecars(monkeypatch, tmp_path):
     def fake_extract(_video, wav, _log, _cancel):
         open(wav, 'wb').close()
 
-    def fake_whisper(_exe, _model, _vad, _wav, output_base, _log, _cancel):
+    def fake_whisper(
+            _exe, _model, _vad, _wav, output_base, _log, _cancel,
+            progress_callback=None):
         output = output_base + '.srt'
         with open(output, 'w', encoding='utf-8') as handle:
             handle.write(_sample_srt('こんにちは'))
@@ -729,7 +1128,9 @@ def test_chinese_failure_does_not_leave_unrequested_japanese(
         lambda _cb, _cancel: ('whisper.exe', 'model.bin', 'vad.bin'))
     monkeypatch.setattr(subtitles, '_extract_audio', lambda _v, wav, _l, _c: open(wav, 'wb').close())
 
-    def fake_whisper(_exe, _model, _vad, _wav, output_base, _log, _cancel):
+    def fake_whisper(
+            _exe, _model, _vad, _wav, output_base, _log, _cancel,
+            progress_callback=None):
         output = output_base + '.srt'
         with open(output, 'w', encoding='utf-8') as handle:
             handle.write(_sample_srt())

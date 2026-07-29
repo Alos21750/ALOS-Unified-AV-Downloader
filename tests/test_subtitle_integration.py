@@ -46,6 +46,12 @@ def test_both_frozen_entry_points_expose_explicit_translation_diagnostic():
         source = (root / filename).read_text(encoding='utf-8')
         assert 'JABLE_LOCAL_TRANSLATION_DIAGNOSTIC_OUTPUT' in source
         assert 'run_local_translation_diagnostic' in source
+        assert (
+            'JABLE_LOCAL_TRANSLATION_SOAK_DIAGNOSTIC_OUTPUT'
+            in source)
+        assert (
+            'run_local_translation_worker_soak_diagnostic'
+            in source)
         assert 'JABLE_LLM_TRANSLATION_DIAGNOSTIC_OUTPUT' in source
         assert 'run_llm_translation_diagnostic' in source
 
@@ -64,12 +70,17 @@ def test_llm_diagnostic_exits_both_entry_points_before_gui_import(
 
     fake_engine.run_llm_translation_diagnostic = fake_run
     fake_engine.run_local_translation_diagnostic = lambda _output: None
+    fake_engine.run_local_translation_worker_soak_diagnostic = (
+        lambda _output: None)
     fake_crashlog = types.ModuleType('crashlog')
     fake_crashlog.install = lambda: None
     monkeypatch.setitem(sys.modules, 'subtitle_engine', fake_engine)
     monkeypatch.setitem(sys.modules, 'crashlog', fake_crashlog)
     monkeypatch.delenv(
         'JABLE_LOCAL_TRANSLATION_DIAGNOSTIC_OUTPUT', raising=False)
+    monkeypatch.delenv(
+        'JABLE_LOCAL_TRANSLATION_SOAK_DIAGNOSTIC_OUTPUT',
+        raising=False)
 
     real_import = builtins.__import__
     gui_roots = {
@@ -566,9 +577,12 @@ def test_smalltool_runs_subtitles_before_marking_seen(monkeypatch, tmp_path):
     monkeypatch.setattr(
         jable_smalltool.M3U8Sites, 'CreateSite', lambda _url, _dest: job)
     calls = []
+    subtitle_progress = []
 
     def fake_generate(path, mode, progress_callback=None, cancel_check=None):
         calls.append((path, mode))
+        progress_callback('transcribe_ja', 0)
+        subtitle_progress.append(worker.get_progress())
         progress_callback('translate_zh', 100)
         return SubtitleResult((str(tmp_path / 'sample.zh-TW.srt'),), ())
 
@@ -584,6 +598,8 @@ def test_smalltool_runs_subtitles_before_marking_seen(monkeypatch, tmp_path):
 
     assert result is None
     assert calls == [(str(video_path), 'zh')]
+    assert subtitle_progress
+    assert subtitle_progress[0][:3] == (0, 100, -1)
     assert marked == [('https://missav.ai/sample', 'sample')]
     assert worker.get_progress() is None
 

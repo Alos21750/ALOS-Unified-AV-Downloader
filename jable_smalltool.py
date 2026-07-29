@@ -12,6 +12,7 @@ Author: ALOS
 import calendar
 import ctypes
 import json
+import multiprocessing
 import os
 import shutil
 import sys
@@ -21,6 +22,11 @@ import re
 from dataclasses import dataclass
 from datetime import date, datetime, timezone, timedelta
 from typing import Optional
+
+if __name__ == '__main__':
+    # Dispatch frozen multiprocessing children before SSL, crash logging,
+    # crawler, or Tk imports.  Translation workers must remain windowless.
+    multiprocessing.freeze_support()
 
 # --- issue #23: harden the SSL cert path before curl_cffi (pulled in by M3U8Sites)
 # imports, so a non-UTF-8 OpenSSL/cert default path can't crash startup. ---
@@ -98,6 +104,29 @@ def _run_translation_diagnostic_if_requested():
                 pass
             from subtitle_engine import run_local_translation_diagnostic
             run_local_translation_diagnostic(output_path)
+            if not os.path.isfile(output_path):
+                raise RuntimeError('diagnostic did not produce its report')
+        except (Exception, SystemExit):
+            raise SystemExit(2) from None
+        raise SystemExit(0)
+
+    local_soak_output = os.environ.get(
+        'JABLE_LOCAL_TRANSLATION_SOAK_DIAGNOSTIC_OUTPUT', '')
+    if local_soak_output:
+        try:
+            output_path = os.path.abspath(local_soak_output.strip())
+            if (os.path.isdir(output_path)
+                    or not os.path.isdir(os.path.dirname(output_path))):
+                raise FileNotFoundError(
+                    'diagnostic output directory is unavailable')
+            try:
+                os.remove(output_path)
+            except FileNotFoundError:
+                pass
+            from subtitle_engine import (
+                run_local_translation_worker_soak_diagnostic,
+            )
+            run_local_translation_worker_soak_diagnostic(output_path)
             if not os.path.isfile(output_path):
                 raise RuntimeError('diagnostic did not produce its report')
         except (Exception, SystemExit):
@@ -207,7 +236,7 @@ except Exception:
 
 # ── Constants ────────────────────────────────────────────────────────
 APP_NAME = 'Jable_smalltool'
-APP_VERSION = '2.5.36'
+APP_VERSION = '2.5.37'
 DEFAULT_WINDOW_WIDTH = 1180
 DEFAULT_WINDOW_HEIGHT = 780
 MIN_WINDOW_WIDTH = 760
@@ -224,6 +253,16 @@ DEFAULT_SCAN_INTERVAL_HOURS = 24
 DEFAULT_DAILY_SCAN_TIME = '18:00'
 MIN_SCAN_INTERVAL_HOURS = 1
 MAX_SCAN_INTERVAL_HOURS = 168
+
+
+def _format_elapsed(seconds: float) -> str:
+    try:
+        total = max(0, int(seconds))
+    except (TypeError, ValueError, OverflowError):
+        total = 0
+    hours, remainder = divmod(total, 3600)
+    minutes, secs = divmod(remainder, 60)
+    return f'{hours:02d}:{minutes:02d}:{secs:02d}'
 
 
 @dataclass(frozen=True)
@@ -1446,6 +1485,7 @@ class SmallToolWorker:
             subtitle_mode = normalize_subtitle_mode(
                 self._subtitle_mode if subtitle_mode is None else subtitle_mode)
             if subtitle_mode != 'none':
+                subtitle_started = time.monotonic()
                 last_stage = [None]
                 stage_keys = {
                     'queued': 'subtitle_stage_queued',
@@ -1456,6 +1496,7 @@ class SmallToolWorker:
                     'transcribe_ja': 'subtitle_stage_transcribe_ja',
                     'translate_en': 'subtitle_stage_translate_en',
                     'translate_zh': 'subtitle_stage_translate_zh',
+                    'done': 'subtitle_stage_done',
                 }
 
                 def _subtitle_progress(stage, percent):
@@ -1464,11 +1505,19 @@ class SmallToolWorker:
                     if stage != last_stage[0]:
                         self._log(f'  [SUBTITLE] {phase}')
                         last_stage[0] = stage
+                    elapsed = T(
+                        'subtitle_elapsed',
+                        elapsed=_format_elapsed(
+                            time.monotonic() - subtitle_started),
+                    )
+                    detail = f'{phase} · {elapsed}'
                     with self._progress_lock:
                         if percent is None:
-                            self._progress = (0, -1, 0, f'{title} · {phase}')
+                            self._progress = (
+                                0, -1, -1, f'{title} · {detail}')
                         else:
-                            self._progress = (percent, 100, 0, f'{title} · {phase}')
+                            self._progress = (
+                                percent, 100, -1, f'{title} · {detail}')
                     self._set_status('st_subtitling', ACCENT)
 
                 try:
@@ -3482,9 +3531,16 @@ class SmallToolApp(ctk.CTk):
                     pct = int(done * 100 / total)
                     self._prog_bar.set(max(0.0, min(1.0, pct / 100)))
                     self._prog_pct.configure(text=f'{pct}%')
-                    speed_str = (f'{speed / 1024:.0f} KB/s' if speed < 1024 * 1024
-                                 else f'{speed / 1024 / 1024:.1f} MB/s')
-                    self._prog_info.configure(text=f'{done}/{total} | {speed_str}')
+                    if speed < 0:
+                        self._prog_info.configure(
+                            text=T('subtitle_processing'))
+                    else:
+                        speed_str = (
+                            f'{speed / 1024:.0f} KB/s'
+                            if speed < 1024 * 1024
+                            else f'{speed / 1024 / 1024:.1f} MB/s')
+                        self._prog_info.configure(
+                            text=f'{done}/{total} | {speed_str}')
                 elif total < 0:
                     self._set_progress_display_mode('scan')
                     self._prog_pct.configure(text='')

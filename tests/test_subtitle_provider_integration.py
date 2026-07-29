@@ -232,7 +232,8 @@ def test_none_and_japanese_modes_never_load_translation_provider_or_pack(
     )
 
     def fake_whisper(
-            _exe, _model, _vad, _wav, output_base, _log, _cancel):
+            _exe, _model, _vad, _wav, output_base, _log, _cancel,
+            progress_callback=None):
         output = output_base + ".srt"
         with open(output, "w", encoding="utf-8") as handle:
             handle.write(_sample_srt("日本語"))
