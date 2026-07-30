@@ -39,6 +39,7 @@ import requests
 import config
 from M3U8Sites.M3U8Crawler import locate_ffmpeg
 from ssl_util import SharedSSLAdapter
+from video_identity import normalize_source_subtitle_evidence
 
 
 WHISPER_VERSION = 'v1.9.1'
@@ -353,6 +354,7 @@ class SubtitleResult:
     files: tuple[str, ...]
     generated: tuple[str, ...]
     no_speech: bool = False
+    satisfied_by_source: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -4888,7 +4890,8 @@ def _generation_slot(cancel_check: Optional[CancelCheck]):
 
 def generate_subtitles(video_path: str, mode,
                        progress_callback: Optional[ProgressCallback] = None,
-                       cancel_check: Optional[CancelCheck] = None) -> SubtitleResult:
+                       cancel_check: Optional[CancelCheck] = None,
+                       source_subtitle_evidence=()) -> SubtitleResult:
     """Generate requested sidecar SRT files next to ``video_path``.
 
     Output names are ``.ja.srt``, ``.en.srt``, and ``.zh-TW.srt`` so media
@@ -4901,8 +4904,30 @@ def generate_subtitles(video_path: str, mode,
     video_path = os.path.abspath(video_path)
     if not os.path.isfile(video_path):
         raise SubtitleError('Downloaded video file was not found')
-
     paths = subtitle_paths(video_path)
+
+    source_evidence = normalize_source_subtitle_evidence(
+        source_subtitle_evidence)
+    satisfied_by_source = (
+        ('zh-TW',)
+        if 'zh-TW' in requested and source_evidence
+        else ()
+    )
+    source_satisfied_files = (
+        (paths['zh-TW'],)
+        if satisfied_by_source and _existing(paths['zh-TW'])
+        else ()
+    )
+    if satisfied_by_source:
+        requested = tuple(
+            language for language in requested
+            if language not in satisfied_by_source)
+    if not requested:
+        _notify(progress_callback, 'done', 100)
+        return SubtitleResult(
+            source_satisfied_files, (),
+            satisfied_by_source=satisfied_by_source)
+
     profile = recognition_profile()
     asr_signature = _asr_signature(profile)
     media_identity = _media_identity(video_path)
@@ -4973,7 +4998,10 @@ def generate_subtitles(video_path: str, mode,
         ]
         if not missing:
             return SubtitleResult(
-                tuple(paths[language] for language in requested), ())
+                tuple(paths[language] for language in requested)
+                + source_satisfied_files,
+                (),
+                satisfied_by_source=satisfied_by_source)
 
         # Once an app-managed file's content hash changes, permanently treat
         # it as user-owned the next time another track writes the manifest.
@@ -5052,9 +5080,10 @@ def generate_subtitles(video_path: str, mode,
                             paths[language]
                             for language in requested
                             if states[language].current
-                        ),
+                        ) + source_satisfied_files,
                         tuple(generated),
                         no_speech=True,
+                        satisfied_by_source=satisfied_by_source,
                     )
                 japanese_source_identity = _asr_source_identity(
                     asr_signature, media_identity)
@@ -5154,6 +5183,7 @@ def generate_subtitles(video_path: str, mode,
                 paths[language]
                 for language in requested
                 if _existing(paths[language])
-            ),
+            ) + source_satisfied_files,
             tuple(generated),
+            satisfied_by_source=satisfied_by_source,
         )

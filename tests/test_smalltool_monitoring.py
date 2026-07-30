@@ -3,6 +3,7 @@ from types import SimpleNamespace
 
 import jable_smalltool
 from smalltool_categories import find_target
+from video_identity import trusted_chinese_subtitle_evidence
 
 
 def _exact_missav_targets():
@@ -308,6 +309,42 @@ def test_worker_dedupes_same_code_across_categories_and_all_sites(
         'versions'] == ['chinese-subtitle']
     assert worker._seen['https://missav.ai/ipzz-905'][
         'code'] == 'ipzz-905'
+
+
+def test_worker_same_url_preserves_trusted_chinese_listing_evidence(
+        monkeypatch, tmp_path):
+    monkeypatch.setattr(jable_smalltool, 'load_seen', lambda: {})
+    monkeypatch.setattr(jable_smalltool, 'save_seen', lambda _seen: None)
+    monkeypatch.setattr(jable_smalltool, 'save_config', lambda _cfg: None)
+    monkeypatch.setattr(jable_smalltool, 'PER_VIDEO_FETCH_DELAY_SEC', 0)
+    monkeypatch.setattr(jable_smalltool, 'MAX_SCAN_PAGES', 1)
+
+    worker = jable_smalltool.SmallToolWorker(lambda _line: None)
+    video_url = 'https://jable.tv/videos/ipzz-905/'
+    worker._fetch_page_for_site = lambda _site, _url: [{
+        'url': video_url,
+        'title': 'IPZZ-905',
+    }]
+    worker._fetch_video_date = lambda _url: (
+        datetime(2026, 7, 12, tzinfo=timezone.utc), 'today')
+    downloaded = []
+    worker._download_one = lambda video, _dest: downloaded.append(video)
+    cfg = {
+        'output_folder': str(tmp_path),
+        'baseline_date': '2026-04-11',
+        'version_preference': 'chinese-subtitle',
+        'first_run_done': False,
+        'selected_targets': [
+            _target('JableTV', 'feed:latest'),
+            _target('JableTV', 'category:chinese-subtitle'),
+        ],
+    }
+
+    assert worker._scan_and_download(cfg) is True
+    assert len(downloaded) == 1
+    assert downloaded[0]['url'] == video_url
+    assert trusted_chinese_subtitle_evidence(downloaded[0]) == (
+        'jable-category-chinese-subtitle',)
 
 
 def test_prior_preferred_download_blocks_cross_site_duplicate(

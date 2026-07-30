@@ -26,6 +26,140 @@ def test_normalize_modes_and_language_outputs():
     assert subtitles.subtitle_languages('none') == ()
 
 
+def test_trusted_source_chinese_satisfies_zh_before_any_pipeline_or_write(
+        monkeypatch, tmp_path):
+    video = tmp_path / 'movie.mp4'
+    video.write_bytes(b'video')
+    forbidden = (
+        'recognition_profile',
+        '_media_identity',
+        '_selected_translation_profile',
+        '_prepare_runtime',
+        '_extract_audio',
+        '_run_recognition',
+        'translate_srt_to_zh_tw',
+        '_atomic_write_text',
+    )
+    for name in forbidden:
+        monkeypatch.setattr(
+            subtitles, name,
+            lambda *_args, _name=name, **_kwargs:
+                pytest.fail(f'{_name} must not run for source-satisfied zh'))
+    progress = []
+
+    result = subtitles.generate_subtitles(
+        str(video),
+        'zh',
+        progress_callback=lambda stage, percent:
+            progress.append((stage, percent)),
+        source_subtitle_evidence=(
+            'missav-url-chinese-subtitle',),
+    )
+
+    assert result == subtitles.SubtitleResult(
+        (), (), satisfied_by_source=('zh-TW',))
+    assert progress == [('done', 100)]
+    assert list(tmp_path.iterdir()) == [video]
+
+
+def test_source_satisfied_zh_reports_existing_valid_sidecar_without_rewriting(
+        monkeypatch, tmp_path):
+    video = tmp_path / 'movie.mp4'
+    video.write_bytes(b'video')
+    chinese = tmp_path / 'movie.zh-TW.srt'
+    chinese.write_text(_sample_srt('既有字幕'), encoding='utf-8')
+    original = chinese.read_bytes()
+    forbidden = (
+        'recognition_profile',
+        '_media_identity',
+        '_selected_translation_profile',
+        '_prepare_runtime',
+        '_extract_audio',
+        '_run_recognition',
+        'translate_srt_to_zh_tw',
+        '_atomic_write_text',
+    )
+    for name in forbidden:
+        monkeypatch.setattr(
+            subtitles, name,
+            lambda *_args, _name=name, **_kwargs:
+                pytest.fail(f'{_name} must not run for source-satisfied zh'))
+
+    result = subtitles.generate_subtitles(
+        str(video),
+        'zh',
+        source_subtitle_evidence=(
+            'supjav-category-chinese-subtitle',),
+    )
+
+    assert result == subtitles.SubtitleResult(
+        (str(chinese),), (), satisfied_by_source=('zh-TW',))
+    assert chinese.read_bytes() == original
+
+
+def test_all_mode_generates_only_ja_and_en_when_source_satisfies_chinese(
+        monkeypatch, tmp_path):
+    video = tmp_path / 'movie.mp4'
+    video.write_bytes(b'video')
+    chinese = tmp_path / 'movie.zh-TW.srt'
+    chinese.write_text(_sample_srt('既有字幕'), encoding='utf-8')
+    original_chinese = chinese.read_bytes()
+    monkeypatch.setattr(
+        config, 'get_recognition_quality', lambda: 'quality')
+    monkeypatch.setattr(
+        subtitles, '_prepare_runtime',
+        lambda *_args: ('recognizer.exe', 'model.bin', 'vad.bin'))
+    monkeypatch.setattr(
+        subtitles, '_extract_audio',
+        lambda _video, wav, _log, _cancel:
+            open(wav, 'wb').close())
+
+    def fake_recognition(
+            _profile, _exe, _model, _vad, _wav, output_base, _log,
+            _cancel, **_kwargs):
+        output = output_base + '.srt'
+        subtitles._atomic_write_text(output, _sample_srt('日本語'))
+        return output
+
+    monkeypatch.setattr(
+        subtitles, '_run_recognition', fake_recognition)
+    monkeypatch.setattr(
+        subtitles, '_selected_translation_profile',
+        lambda: SimpleNamespace(uses_api=False))
+    monkeypatch.setattr(
+        subtitles, '_translation_signature',
+        lambda _profile: 'translation-signature')
+
+    def fake_translate(source, destination, target, *_args, **_kwargs):
+        assert target == 'en'
+        assert os.path.isfile(source)
+        subtitles._atomic_write_text(
+            destination, _sample_srt('English'))
+        return destination
+
+    monkeypatch.setattr(subtitles, 'translate_srt', fake_translate)
+    monkeypatch.setattr(
+        subtitles, 'translate_srt_to_zh_tw',
+        lambda *_args, **_kwargs:
+            pytest.fail('Chinese sidecar must not be generated'))
+
+    result = subtitles.generate_subtitles(
+        str(video),
+        'all',
+        source_subtitle_evidence=(
+            'jable-category-chinese-subtitle',),
+    )
+
+    japanese = tmp_path / 'movie.ja.srt'
+    english = tmp_path / 'movie.en.srt'
+    assert result.files == (str(japanese), str(english), str(chinese))
+    assert result.generated == (str(japanese), str(english))
+    assert result.satisfied_by_source == ('zh-TW',)
+    assert japanese.is_file()
+    assert english.is_file()
+    assert chinese.read_bytes() == original_chinese
+
+
 def test_parse_and_render_srt_round_trip():
     source = (
         '\ufeff1\r\n00:00:00,000 --> 00:00:01,500\r\nこんにちは\r\n\r\n'

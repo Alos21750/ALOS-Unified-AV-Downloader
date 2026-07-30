@@ -42,6 +42,10 @@ from translation_settings_ui import (
     translation_failure_message,
     translation_provider_summary,
 )
+from video_identity import (
+    normalize_source_subtitle_evidence,
+    trusted_chinese_subtitle_evidence,
+)
 from ui_theme import (
     ACCENT, ACCENT_HOVER, ACCENT_DIM,
     SUCCESS, SUCCESS_DIM, WARNING, WARNING_DIM, ERROR_C, ERROR_DIM,
@@ -51,7 +55,7 @@ from ui_theme import (
     browse_columns_for_width,
 )
 
-APP_VERSION = '2.5.39'
+APP_VERSION = '2.5.40'
 
 # issue #24: startup breadcrumbs — no-op if crashlog unavailable
 try:
@@ -122,9 +126,14 @@ def _select_persist(items, cap):
 
 # ── Download Manager ────────────────────────────────────────────────
 class DownloadItem:
-    __slots__ = ('url', 'name', 'state', 'progress', 'speed', 'error', 'dest')
+    __slots__ = (
+        'url', 'name', 'state', 'progress', 'speed', 'error', 'dest',
+        'source_subtitle_evidence',
+    )
 
-    def __init__(self, url: str, name: str = '', state: str = '', dest: str = ''):
+    def __init__(
+            self, url: str, name: str = '', state: str = '', dest: str = '',
+            source_subtitle_evidence=()):
         self.url = url
         self.name = name or url.rstrip('/').split('/')[-1]
         self.state = state
@@ -132,21 +141,31 @@ class DownloadItem:
         self.speed = ''
         self.error = ''
         self.dest = dest or ''
+        self.source_subtitle_evidence = trusted_chinese_subtitle_evidence({
+            'url': url,
+            '_source_subtitle_evidence': source_subtitle_evidence,
+        })
 
 
 class _DownloadTask:
     """One URL moving through the download and optional subtitle queues."""
 
     __slots__ = (
-        'url', 'dest', 'epoch', 'job', 'subtitle_mode', 'cancelled',
+        'url', 'dest', 'epoch', 'job', 'subtitle_mode',
+        'source_subtitle_evidence', 'cancelled',
     )
 
-    def __init__(self, url: str, dest: str, epoch: int):
+    def __init__(
+            self, url: str, dest: str, epoch: int,
+            source_subtitle_evidence=()):
         self.url = url
         self.dest = dest
         self.epoch = epoch
         self.job = None
         self.subtitle_mode = 'none'
+        self.source_subtitle_evidence = (
+            normalize_source_subtitle_evidence(
+                source_subtitle_evidence))
         self.cancelled = threading.Event()
 
 
@@ -181,12 +200,25 @@ class DownloadManager:
         for _ in range(self._max_concurrent):
             self._try_next()
 
-    def add_item(self, url: str, name: str = '', state: str = '', dest: str = ''):
+    def add_item(
+            self, url: str, name: str = '', state: str = '', dest: str = '',
+            source_subtitle_evidence=()):
         with self._lock:
             if url not in self._items:
-                self._items[url] = DownloadItem(url, name, state, dest)
-            elif dest:
-                self._items[url].dest = dest
+                self._items[url] = DownloadItem(
+                    url, name, state, dest, source_subtitle_evidence)
+            else:
+                item = self._items[url]
+                if dest:
+                    item.dest = dest
+                evidence = set(item.source_subtitle_evidence)
+                evidence.update(trusted_chinese_subtitle_evidence({
+                    'url': url,
+                    '_source_subtitle_evidence':
+                        source_subtitle_evidence,
+                }))
+                item.source_subtitle_evidence = (
+                    normalize_source_subtitle_evidence(evidence))
             return self._items[url]
 
     def get_items(self) -> list[DownloadItem]:
@@ -225,7 +257,10 @@ class DownloadManager:
                 item.dest = dest or item.dest
             else:
                 self._items[url] = DownloadItem(url, dest=dest)
-            task = _DownloadTask(url, dest, self._cancel_epoch)
+                item = self._items[url]
+            task = _DownloadTask(
+                url, dest, self._cancel_epoch,
+                item.source_subtitle_evidence)
             if len(self._active) < self._max_concurrent:
                 self._active[url] = task
                 start_task = task
@@ -260,8 +295,12 @@ class DownloadManager:
         with self._lock:
             task = self._active.get(url)
             if task is None:
+                item = self._items.get(url)
                 task = _DownloadTask(
-                    url, dest, self._cancel_epoch if epoch is None else epoch)
+                    url, dest, self._cancel_epoch if epoch is None else epoch,
+                    (
+                        item.source_subtitle_evidence
+                        if item is not None else ()))
                 self._active[url] = task
         self._run_download(task)
 
@@ -275,6 +314,11 @@ class DownloadManager:
                     self._complete_download(task, '已取消')
                     return
                 job = M3U8Sites.CreateSite(url, task.dest)
+                if (
+                        job is not None
+                        and hasattr(job, 'add_source_subtitle_evidence')):
+                    job.add_source_subtitle_evidence(
+                        task.source_subtitle_evidence)
                 with self._lock:
                     if self._active.get(url) is task:
                         task.job = job
@@ -406,15 +450,33 @@ class DownloadManager:
         try:
             if self._context_cancelled(task):
                 raise SubtitleCancelled()
+            evidence = set(task.source_subtitle_evidence)
+            evidence_getter = getattr(
+                job, 'source_subtitle_evidence', None)
+            if callable(evidence_getter):
+                evidence.update(normalize_source_subtitle_evidence(
+                    evidence_getter()))
+            evidence = normalize_source_subtitle_evidence(evidence)
+            subtitle_kwargs = {
+                'progress_callback': _subtitle_progress,
+                'cancel_check': lambda: (
+                    self._context_cancelled(task) or bool(job._cancel_job)),
+            }
+            if evidence:
+                subtitle_kwargs['source_subtitle_evidence'] = evidence
             subtitle_result = generate_subtitles(
                 job._get_video_savename(), task.subtitle_mode,
-                progress_callback=_subtitle_progress,
-                cancel_check=lambda: (
-                    self._context_cancelled(task) or bool(job._cancel_job)),
-            )
-            if subtitle_result.no_speech:
+                **subtitle_kwargs)
+            if (
+                    subtitle_result.satisfied_by_source
+                    and not subtitle_result.files):
+                completion_state = '已下載'
+                print(T('subtitle_source_chinese_skip'), flush=True)
+            elif subtitle_result.no_speech:
                 completion_state = '未偵測到日語語音'
-            elif not subtitle_result.files:
+            elif (
+                    not subtitle_result.files
+                    and not subtitle_result.satisfied_by_source):
                 completion_state = '未完成'
                 warning = T(
                     'subtitle_failed', error=T('subtitle_empty_result'))
@@ -570,10 +632,14 @@ class DownloadManager:
         tmp = path + '.tmp'
         with open(tmp, 'w', encoding='utf-8', newline='') as f:
             w = csv.writer(f)
-            w.writerow(['狀態', '名稱', '進度', '速度', '網址', '目標'])
+            w.writerow([
+                '狀態', '名稱', '進度', '速度', '網址', '目標',
+                '字幕來源證據',
+            ])
             for item in items:
                 w.writerow([item.state, item.name, f'{item.progress}%',
-                            item.speed, item.url, item.dest])
+                            item.speed, item.url, item.dest,
+                            '|'.join(item.source_subtitle_evidence)])
             f.flush()
             os.fsync(f.fileno())
         os.replace(tmp, path)
@@ -595,7 +661,8 @@ class DownloadManager:
                             state = '未完成'
                         item = self.add_item(
                             url, row.get('名稱', ''), state,
-                            row.get('目標', ''))
+                            row.get('目標', ''),
+                            row.get('字幕來源證據', ''))
                         progress = (row.get('進度', '') or '').rstrip('%')
                         try:
                             item.progress = int(float(progress))
@@ -734,6 +801,7 @@ class ModernApp(ctk.CTk):
         self._has_next = True
         self._videos: list[dict] = []
         self._selected_urls: set = set()
+        self._selected_source_subtitle_evidence: dict[str, tuple[str, ...]] = {}
         self._sidebar_expanded: dict[str, bool] = {}
         self._grid_gen: int = 0  # bumps on each page refresh so stale thumbs are dropped
         self._grid_columns = browse_columns_for_width(1280)
@@ -2472,11 +2540,26 @@ class ModernApp(ctk.CTk):
         except RuntimeError:
             pass
 
+    def _source_subtitle_evidence_for_video(self, video: dict):
+        candidate = dict(video or {})
+        candidate['_site'] = self._site_key
+        candidate['_source_listing_url'] = self._current_base_url
+        return trusted_chinese_subtitle_evidence(candidate)
+
     def _toggle_select(self, url: str):
         if url in self._selected_urls:
             self._selected_urls.discard(url)
+            self._selected_source_subtitle_evidence.pop(url, None)
         else:
             self._selected_urls.add(url)
+            video = next(
+                (item for item in self._videos
+                 if item.get('url', '') == url),
+                {'url': url},
+            )
+            evidence = self._source_subtitle_evidence_for_video(video)
+            if evidence:
+                self._selected_source_subtitle_evidence[url] = evidence
         # Update the specific card in-place (no full grid rebuild)
         w = self._card_widgets.get(url)
         if w:
@@ -2525,6 +2608,7 @@ class ModernApp(ctk.CTk):
     def _clear_selection_in_place(self):
         selected = list(self._selected_urls)
         self._selected_urls.clear()
+        self._selected_source_subtitle_evidence.clear()
         for url in selected:
             self._set_card_selected(url, False)
         self._update_selection_count()
@@ -2553,6 +2637,9 @@ class ModernApp(ctk.CTk):
             url = v.get('url', '')
             if url:
                 self._selected_urls.add(url)
+                evidence = self._source_subtitle_evidence_for_video(v)
+                if evidence:
+                    self._selected_source_subtitle_evidence[url] = evidence
                 self._set_card_selected(url, True)
         self._update_selection_count()
 
@@ -2560,6 +2647,7 @@ class ModernApp(ctk.CTk):
         self._site_key = val
         self._categories.clear()
         self._selected_urls.clear()
+        self._selected_source_subtitle_evidence.clear()
         self._update_selection_count()
         self._rebuild_sidebar()
         self._load_categories()
@@ -2576,6 +2664,7 @@ class ModernApp(ctk.CTk):
         self._browse_blocked = False
         self._browse_empty_message = ''
         self._selected_urls.clear()
+        self._selected_source_subtitle_evidence.clear()
         self._update_selection_count()
         self._load_page()
 
@@ -2602,6 +2691,7 @@ class ModernApp(ctk.CTk):
         self._browse_blocked = False
         self._browse_empty_message = ''
         self._selected_urls.clear()
+        self._selected_source_subtitle_evidence.clear()
         self._update_selection_count()
         self._load_page()
 
@@ -2613,6 +2703,7 @@ class ModernApp(ctk.CTk):
         self._browse_blocked = False
         self._browse_empty_message = ''
         self._selected_urls.clear()
+        self._selected_source_subtitle_evidence.clear()
         self._update_selection_count()
         self._cat_var.set(f'🏷 {name}')
         self._load_page()
@@ -2676,7 +2767,11 @@ class ModernApp(ctk.CTk):
         dest = self._dest_var.get() or 'download'
         for url in list(self._selected_urls):
             if M3U8Sites.VaildateUrl(url):
-                self._dlmgr.add_item(url, state='等待中', dest=dest)
+                self._dlmgr.add_item(
+                    url, state='等待中', dest=dest,
+                    source_subtitle_evidence=(
+                        self._selected_source_subtitle_evidence.get(
+                            url, ())))
         n = len(self._selected_urls)
         self._clear_selection_in_place()
         print(f'已加入 {n} 部到清單')
@@ -2685,7 +2780,11 @@ class ModernApp(ctk.CTk):
         dest = self._dest_var.get() or 'download'
         for url in list(self._selected_urls):
             if M3U8Sites.VaildateUrl(url):
-                self._dlmgr.add_item(url, state='等待中', dest=dest)
+                self._dlmgr.add_item(
+                    url, state='等待中', dest=dest,
+                    source_subtitle_evidence=(
+                        self._selected_source_subtitle_evidence.get(
+                            url, ())))
                 self._dlmgr.enqueue(url, dest)
         n = len(self._selected_urls)
         self._clear_selection_in_place()
@@ -2768,7 +2867,16 @@ class ModernApp(ctk.CTk):
                     seen.add(video_url)
                     new_count += 1
                     name = v.get('title', '')
-                    self._dlmgr.add_item(video_url, name=name, state='等待中', dest=dest)
+                    candidate = dict(v)
+                    candidate['_site'] = (
+                        'JableTV' if is_jable
+                        else 'SupJav' if is_supjav
+                        else 'MissAV')
+                    candidate['_source_listing_url'] = url
+                    self._dlmgr.add_item(
+                        video_url, name=name, state='等待中', dest=dest,
+                        source_subtitle_evidence=(
+                            trusted_chinese_subtitle_evidence(candidate)))
                     self._dlmgr.enqueue(video_url, dest)
 
             if new_count == 0:
@@ -3181,7 +3289,10 @@ class ModernApp(ctk.CTk):
         if self._download_autosave_ticks < 10:
             return
         self._download_autosave_ticks = 0
-        sig = tuple((i.url, i.name, i.state, i.progress, i.dest) for i in items)
+        sig = tuple((
+            i.url, i.name, i.state, i.progress, i.dest,
+            i.source_subtitle_evidence,
+        ) for i in items)
         if sig == self._last_download_save_sig:
             return
         try:

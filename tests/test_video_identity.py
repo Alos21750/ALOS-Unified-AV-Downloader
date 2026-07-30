@@ -4,11 +4,15 @@ import pytest
 
 from video_identity import (
     DEFAULT_VERSION_PREFERENCE,
+    MAX_SOURCE_SUBTITLE_EVIDENCE_TEXT,
+    TRUSTED_CHINESE_SUBTITLE_EVIDENCE,
     VALID_VERSION_PREFERENCES,
     canonical_code,
     dedupe_video_candidates,
+    normalize_source_subtitle_evidence,
     normalize_version_preference,
     site_from_url,
+    trusted_chinese_subtitle_evidence,
     video_code,
     video_versions,
 )
@@ -62,6 +66,140 @@ def test_video_code_uses_site_specific_evidence(video, expected):
 ])
 def test_site_from_url(url, expected):
     assert site_from_url(url) == expected
+
+
+@pytest.mark.parametrize(('video', 'expected'), [
+    ({
+        'url': 'https://missav.ai/cn/mimk-284-chinese-subtitle',
+    }, ('missav-url-chinese-subtitle',)),
+    ({
+        'url': 'https://missav.ai/cn/mimk-284-chinese-subtitles',
+    }, ('missav-url-chinese-subtitle',)),
+    ({
+        '_site': 'JableTV',
+        '_target_id': 'category:chinese-subtitle',
+        'url': 'https://jable.tv/videos/ipzz-905/',
+    }, ('jable-category-chinese-subtitle',)),
+    ({
+        '_site': 'MissAV',
+        '_target_id': 'feed:chinese-subtitle',
+        'url': 'https://missav.ws/ipzz-905',
+    }, ('missav-category-chinese-subtitle',)),
+    ({
+        '_site': 'SupJav',
+        '_target_id': 'category:chinese-subtitles',
+        'url': 'https://supjav.com/440577.html',
+    }, ('supjav-category-chinese-subtitle',)),
+    ({
+        '_site': 'JableTV',
+        'url': 'https://jable.tv/videos/ipzz-905/',
+        '_source_listing_url':
+            'https://jable.tv/categories/chinese-subtitle/',
+    }, ('jable-category-chinese-subtitle',)),
+    ({
+        '_site': 'MissAV',
+        'url': 'https://missav.ai/ipzz-905',
+        '_source_listing_url':
+            'https://missav.ai/dm278/cn/chinese-subtitle',
+    }, ('missav-category-chinese-subtitle',)),
+    ({
+        '_site': 'SupJav',
+        'url': 'https://supjav.com/440577.html',
+        '_source_listing_url':
+            'https://supjav.com/zh/category/chinese-subtitles',
+    }, ('supjav-category-chinese-subtitle',)),
+])
+def test_trusted_chinese_subtitle_evidence_uses_structural_source_signals(
+        video, expected):
+    assert trusted_chinese_subtitle_evidence(video) == expected
+
+
+@pytest.mark.parametrize('video', [
+    # /cn/ controls the MissAV site language; it is not subtitle evidence.
+    {'url': 'https://missav.ai/cn/mimk-284'},
+    # Display-title heuristics remain useful for browse badges/deduplication
+    # but are intentionally too weak to suppress requested work.
+    {'url': 'https://supjav.com/1.html',
+     'title': '[Chinese Subtitles] IPZZ-905'},
+    {'url': 'https://jable.tv/videos/ipzz-905/',
+     'title': 'A discussion about 中文字幕'},
+    {'url': 'https://jable.tv/videos/ipzz-905-c/'},
+    {
+        '_site': 'JableTV',
+        '_target_id': 'feed:latest',
+        'url': 'https://jable.tv/videos/ipzz-905/',
+    },
+    {
+        '_site': 'MissAV',
+        '_target_id': 'feed:latest',
+        'url': 'https://missav.ai/ipzz-905',
+    },
+    {
+        '_site': 'SupJav',
+        '_target_id': 'category:reducing-mosaic',
+        'url': 'https://supjav.com/1.html',
+    },
+    {
+        '_site': 'MissAV',
+        'url': 'https://missav.ai/ipzz-905',
+        '_hls_subtitle_renditions': [
+            {'language': 'zh', 'uri': 'subtitles/zh.m3u8'},
+        ],
+    },
+    {'url': 'https://missav.evil.example/ipzz-905-chinese-subtitle'},
+    {'url': 'https://example.test/ipzz-905-chinese-subtitle'},
+    {'url': 'http://missav.ai/ipzz-905-chinese-subtitle'},
+    {
+        '_site': 'JableTV',
+        '_target_id': 'category:chinese-subtitle',
+    },
+    {
+        'url': 'https://evil.jable.tv/videos/ipzz-905/',
+        '_source_subtitle_evidence':
+            'jable-category-chinese-subtitle',
+    },
+    {
+        'url': 'https://missav.evil.example/ipzz-905',
+        '_source_subtitle_evidence':
+            'missav-category-chinese-subtitle',
+    },
+    {
+        'url': 'https://supjav.evil.example/1.html',
+        '_source_subtitle_evidence':
+            'supjav-category-chinese-subtitle',
+    },
+    {
+        '_site': 'SupJav',
+        'url': 'https://supjav.com/1.html',
+        '_source_listing_url':
+            'http://supjav.com/category/chinese-subtitles',
+    },
+    {
+        '_site': 'JableTV',
+        '_target_id': 'category:chinese-subtitle',
+        'url': 'https://supjav.com/1.html',
+    },
+])
+def test_trusted_chinese_subtitle_evidence_fails_closed(video):
+    assert trusted_chinese_subtitle_evidence(video) == ()
+
+
+def test_source_subtitle_evidence_normalizer_is_allowlisted_and_bounded():
+    expected = tuple(sorted(TRUSTED_CHINESE_SUBTITLE_EVIDENCE))
+    assert normalize_source_subtitle_evidence(
+        '|'.join(reversed(expected))) == expected
+    assert normalize_source_subtitle_evidence(
+        ['missav-url-chinese-subtitle', 'forged']) == (
+            'missav-url-chinese-subtitle',)
+    assert normalize_source_subtitle_evidence(
+        'x' * (MAX_SOURCE_SUBTITLE_EVIDENCE_TEXT + 1)) == ()
+    assert normalize_source_subtitle_evidence(
+        ['missav-url-chinese-subtitle']
+        * (len(TRUSTED_CHINESE_SUBTITLE_EVIDENCE) + 1)) == ()
+    assert normalize_source_subtitle_evidence(
+        '|'.join(
+            ['missav-url-chinese-subtitle']
+            * (len(TRUSTED_CHINESE_SUBTITLE_EVIDENCE) + 1))) == ()
 
 
 @pytest.mark.parametrize(('video', 'expected'), [
@@ -140,6 +278,29 @@ def test_same_url_across_categories_unions_version_evidence():
     assert kept == [latest]
     assert latest['_versions'] == ['chinese-subtitle']
     assert chinese['_versions'] == ['chinese-subtitle']
+    assert latest['_source_subtitle_evidence'] == (
+        'jable-category-chinese-subtitle',)
+    assert chinese['_source_subtitle_evidence'] == (
+        'jable-category-chinese-subtitle',)
+    assert trusted_chinese_subtitle_evidence(latest) == (
+        'jable-category-chinese-subtitle',)
+
+
+def test_same_url_title_heuristic_does_not_become_source_subtitle_evidence():
+    plain = {
+        '_site': 'JableTV', '_target_id': 'feed:latest',
+        'url': 'https://jable.tv/videos/ipzz-905/', 'title': 'IPZZ-905',
+    }
+    title_only = {
+        '_site': 'JableTV', '_target_id': 'feed:latest',
+        'url': plain['url'], 'title': '[Chinese Subtitles] IPZZ-905',
+    }
+
+    kept, _ = dedupe_video_candidates(
+        [plain, title_only], 'chinese-subtitle')
+
+    assert kept == [plain]
+    assert trusted_chinese_subtitle_evidence(plain) == ()
 
 
 def test_same_version_cross_site_tie_has_stable_source_order():

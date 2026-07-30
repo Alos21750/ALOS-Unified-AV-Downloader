@@ -212,8 +212,10 @@ from video_identity import (
     DEFAULT_VERSION_PREFERENCE,
     VALID_VERSION_PREFERENCES,
     dedupe_video_candidates,
+    normalize_source_subtitle_evidence,
     normalize_version_preference,
     site_from_url,
+    trusted_chinese_subtitle_evidence,
     url_slug,
     video_code,
     video_versions,
@@ -236,7 +238,7 @@ except Exception:
 
 # ── Constants ────────────────────────────────────────────────────────
 APP_NAME = 'Jable_smalltool'
-APP_VERSION = '2.5.39'
+APP_VERSION = '2.5.40'
 DEFAULT_WINDOW_WIDTH = 1180
 DEFAULT_WINDOW_HEIGHT = 780
 MIN_WINDOW_WIDTH = 760
@@ -1456,6 +1458,12 @@ class SmallToolWorker:
         site_obj = None
         try:
             site_obj = M3U8Sites.CreateSite(vurl, dest)
+            source_subtitle_evidence = (
+                trusted_chinese_subtitle_evidence(video))
+            if (
+                    site_obj is not None
+                    and hasattr(site_obj, 'add_source_video_metadata')):
+                site_obj.add_source_video_metadata(video)
             if not site_obj or not site_obj.is_url_vaildate():
                 err = getattr(site_obj, '_last_error', None)
                 if isinstance(err, MirrorsBlockedError):
@@ -1529,20 +1537,38 @@ class SmallToolWorker:
                     return 'subtitle_failed'
 
                 try:
+                    evidence = set(source_subtitle_evidence)
+                    evidence_getter = getattr(
+                        site_obj, 'source_subtitle_evidence', None)
+                    if callable(evidence_getter):
+                        evidence.update(normalize_source_subtitle_evidence(
+                            evidence_getter()))
+                    evidence = normalize_source_subtitle_evidence(evidence)
+                    subtitle_kwargs = {
+                        'progress_callback': _subtitle_progress,
+                        'cancel_check': lambda: (
+                            self._stop.is_set()
+                            or bool(getattr(
+                                site_obj, '_cancel_job', False))),
+                    }
+                    if evidence:
+                        subtitle_kwargs[
+                            'source_subtitle_evidence'] = evidence
                     subtitle_result = generate_subtitles(
                         site_obj._get_video_savename(), subtitle_mode,
-                        progress_callback=_subtitle_progress,
-                        cancel_check=lambda: (
-                            self._stop.is_set()
-                            or bool(getattr(site_obj, '_cancel_job', False))),
-                    )
+                        **subtitle_kwargs)
+                    if subtitle_result.satisfied_by_source:
+                        self._log(
+                            f'  [SUBTITLE] '
+                            f'{T("subtitle_source_chinese_skip")}')
                     if subtitle_result.no_speech:
                         self._log(f'  [SUBTITLE] {T("subtitle_no_speech")}')
                     elif not subtitle_result.files:
-                        self._log(
-                            f'  [SUBTITLE-ERR] '
-                            f'{T("subtitle_failed", error=T("subtitle_empty_result"))}')
-                        return 'subtitle_failed'
+                        if not subtitle_result.satisfied_by_source:
+                            self._log(
+                                f'  [SUBTITLE-ERR] '
+                                f'{T("subtitle_failed", error=T("subtitle_empty_result"))}')
+                            return 'subtitle_failed'
                     else:
                         self._log(T(
                             'subtitle_ready', count=len(subtitle_result.files)))

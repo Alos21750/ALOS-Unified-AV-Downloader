@@ -27,6 +27,10 @@ import tempfile
 import ctypes
 import sys
 from urllib.parse import urlsplit, urlunsplit, urljoin
+from video_identity import (
+    normalize_source_subtitle_evidence,
+    trusted_chinese_subtitle_evidence,
+)
 
 
 class MirrorsBlockedError(Exception):
@@ -483,6 +487,7 @@ class M3U8Crawler:
         self._bytes_downloaded = 0
         self._speed_start = 0.0
         self._last_error = None
+        self._source_subtitle_evidence = ()
         try:
             self._dirName = self.validate_url(url)
             if not self._dirName: return
@@ -494,6 +499,7 @@ class M3U8Crawler:
             self._temp_folder = os.path.join(self._dest_folder, self._dirName)
 
             self.get_url_infos()
+            self.add_source_video_metadata({'url': self._url})
             if self.is_url_vaildate():
                 if self._targetName:
                     self._targetName = _sanitize_filename(self._targetName)
@@ -519,6 +525,26 @@ class M3U8Crawler:
     def target_name(self): return self._targetName
     def dest_folder(self): return self._dest_folder
     def is_url_vaildate(self): return True if self._m3u8url else False
+
+    def add_source_subtitle_evidence(self, evidence):
+        evidence = trusted_chinese_subtitle_evidence({
+            'url': self._url,
+            '_source_subtitle_evidence': evidence,
+        })
+        combined = set(normalize_source_subtitle_evidence(
+            self._source_subtitle_evidence))
+        combined.update(evidence)
+        self._source_subtitle_evidence = (
+            normalize_source_subtitle_evidence(combined))
+
+    def add_source_video_metadata(self, video):
+        """Attach reviewed source-version evidence supplied by a browser scan."""
+        self.add_source_subtitle_evidence(
+            trusted_chinese_subtitle_evidence(video))
+
+    def source_subtitle_evidence(self):
+        return tuple(self._source_subtitle_evidence)
+
     def _transform_segment(self, data):
         """Hook: transform raw segment bytes before AES/write. Default identity; sites may override."""
         return data

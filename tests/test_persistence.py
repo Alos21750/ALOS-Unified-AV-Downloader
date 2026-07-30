@@ -79,6 +79,57 @@ def test_download_queue_csv_round_trip_preserves_destination(tmp_path):
     assert restored.dest == r'C:\Videos'
 
 
+def test_download_queue_csv_round_trip_preserves_allowlisted_source_evidence(
+        tmp_path):
+    path = tmp_path / 'download_queue.csv'
+    url = 'https://jable.tv/videos/ipzz-905/'
+    manager = DownloadManager()
+    manager.add_item(
+        url,
+        state='未完成',
+        source_subtitle_evidence=(
+            'jable-category-chinese-subtitle',),
+    )
+
+    manager.save_csv(str(path))
+
+    loaded = DownloadManager()
+    loaded.load_csv(str(path))
+    assert loaded.get_items()[0].source_subtitle_evidence == (
+        'jable-category-chinese-subtitle',)
+
+
+def test_download_queue_csv_rejects_unknown_mismatched_and_oversized_evidence(
+        tmp_path):
+    path = tmp_path / 'download_queue.csv'
+    with open(path, 'w', encoding='utf-8', newline='') as handle:
+        writer = csv.writer(handle)
+        writer.writerow([
+            '狀態', '名稱', '進度', '速度', '網址', '目標',
+            '字幕來源證據',
+        ])
+        writer.writerow([
+            '未完成', 'Unknown', '0%', '',
+            'https://example.test/one', '', 'missav-url-chinese-subtitle',
+        ])
+        writer.writerow([
+            '未完成', 'Wrong site', '0%', '',
+            'https://supjav.com/1.html', '',
+            'jable-category-chinese-subtitle',
+        ])
+        writer.writerow([
+            '未完成', 'Oversized', '0%', '',
+            'https://jable.tv/videos/two/', '', 'x' * 513,
+        ])
+
+    manager = DownloadManager()
+    manager.load_csv(str(path))
+
+    assert all(
+        item.source_subtitle_evidence == ()
+        for item in manager.get_items())
+
+
 def test_download_queue_csv_load_tolerates_missing_destination_column(tmp_path):
     path = tmp_path / 'old_queue.csv'
     with open(path, 'w', encoding='utf-8', newline='') as f:
@@ -210,7 +261,10 @@ def test_clear_then_save_writes_header_only(tmp_path):
 
     with open(path, 'r', encoding='utf-8', newline='') as f:
         rows = list(csv.reader(f))
-    assert rows == [['狀態', '名稱', '進度', '速度', '網址', '目標']]
+    assert rows == [[
+        '狀態', '名稱', '進度', '速度', '網址', '目標',
+        '字幕來源證據',
+    ]]
 
 
 def test__visible_window_prioritizes_active():

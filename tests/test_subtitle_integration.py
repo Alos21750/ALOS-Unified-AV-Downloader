@@ -163,6 +163,59 @@ def test_modern_manager_runs_selected_subtitle_mode(monkeypatch, tmp_path):
     assert item.error == ''
 
 
+@pytest.mark.parametrize(('url', 'provided_evidence', 'expected_evidence'), [
+    (
+        'https://missav.ai/sample-001-chinese-subtitle',
+        (),
+        ('missav-url-chinese-subtitle',),
+    ),
+    (
+        'https://jable.tv/videos/sample-001/',
+        ('jable-category-chinese-subtitle',),
+        ('jable-category-chinese-subtitle',),
+    ),
+    (
+        'https://supjav.com/440577.html',
+        ('supjav-category-chinese-subtitle',),
+        ('supjav-category-chinese-subtitle',),
+    ),
+])
+def test_modern_passes_trusted_source_evidence_and_accepts_source_satisfied_zh(
+        monkeypatch, tmp_path, url, provided_evidence, expected_evidence):
+    video = tmp_path / 'sample.mp4'
+    video.write_bytes(b'video')
+    job = FakeDownloadJob(video)
+    monkeypatch.setattr(
+        gui_modern.M3U8Sites, 'CreateSite',
+        lambda _url, _dest: job)
+    calls = []
+
+    def fake_generate(path, mode, **kwargs):
+        calls.append((
+            path, mode, kwargs.get('source_subtitle_evidence')))
+        return SubtitleResult(
+            (), (), satisfied_by_source=('zh-TW',))
+
+    monkeypatch.setattr(gui_modern, 'generate_subtitles', fake_generate)
+    manager = gui_modern.DownloadManager(
+        subtitle_mode_getter=lambda: 'zh')
+    manager.add_item(
+        url,
+        state='等待中',
+        source_subtitle_evidence=provided_evidence,
+    )
+
+    manager._run(url, str(tmp_path), epoch=0)
+
+    assert _wait_until(
+        lambda: manager.subtitle_active_count == 0
+        and manager.subtitle_pending_count == 0)
+    item = manager.get_items()[0]
+    assert calls == [(str(video), 'zh', expected_evidence)]
+    assert item.state == '已下載'
+    assert item.error == ''
+
+
 def test_modern_keeps_video_and_surfaces_subtitle_failure(monkeypatch, tmp_path):
     video = tmp_path / 'sample.mp4'
     video.write_bytes(b'video')
@@ -602,6 +655,64 @@ def test_smalltool_runs_subtitles_before_marking_seen(monkeypatch, tmp_path):
     assert subtitle_progress[0][:3] == (0, 100, -1)
     assert marked == [('https://missav.ai/sample', 'sample')]
     assert worker.get_progress() is None
+
+
+@pytest.mark.parametrize(('sample', 'expected_evidence'), [
+    ({
+        'url': 'https://jable.tv/videos/sample-001/',
+        'title': 'sample',
+        '_site': 'JableTV',
+        '_target_id': 'category:chinese-subtitle',
+    }, ('jable-category-chinese-subtitle',)),
+    ({
+        'url': 'https://missav.ai/sample-001',
+        'title': 'sample',
+        '_site': 'MissAV',
+        '_target_id': 'feed:chinese-subtitle',
+    }, ('missav-category-chinese-subtitle',)),
+    ({
+        'url': 'https://supjav.com/440577.html',
+        'title': 'sample',
+        '_site': 'SupJav',
+        '_target_id': 'category:chinese-subtitles',
+    }, ('supjav-category-chinese-subtitle',)),
+])
+def test_smalltool_passes_category_evidence_and_marks_source_satisfied_zh_seen(
+        monkeypatch, tmp_path, sample, expected_evidence):
+    video_path = tmp_path / 'sample.mp4'
+    video_path.write_bytes(b'video')
+    job = FakeDownloadJob(video_path)
+    monkeypatch.setattr(jable_smalltool, 'load_seen', lambda: {})
+    monkeypatch.setattr(
+        jable_smalltool.M3U8Sites, 'CreateSite',
+        lambda _url, _dest: job)
+    calls = []
+
+    def fake_generate(path, mode, **kwargs):
+        calls.append((
+            path, mode, kwargs.get('source_subtitle_evidence')))
+        return SubtitleResult(
+            (), (), satisfied_by_source=('zh-TW',))
+
+    monkeypatch.setattr(
+        jable_smalltool, 'generate_subtitles', fake_generate)
+    logs = []
+    worker = jable_smalltool.SmallToolWorker(logs.append)
+    worker._subtitle_mode = 'zh'
+    marked = []
+    worker._mark_seen = (
+        lambda url, title, **kwargs:
+            marked.append((url, title, kwargs.get('video'))))
+    result = worker._download_one(sample, str(tmp_path))
+
+    assert result is None
+    assert calls == [(str(video_path), 'zh', expected_evidence)]
+    assert marked == [(sample['url'], sample['title'], sample)]
+    assert any(
+        locales.T('subtitle_source_chinese_skip') in line
+        for line in logs)
+    assert not any('[SUBTITLE-ERR]' in line for line in logs)
+    assert locales.T('subtitle_ready', count=0) not in logs
 
 
 def test_smalltool_no_speech_is_logged_and_marked_seen(monkeypatch, tmp_path):

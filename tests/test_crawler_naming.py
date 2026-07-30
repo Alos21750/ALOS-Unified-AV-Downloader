@@ -62,3 +62,18 @@ def test_make_cipher_explicit_iv_overrides_index():
 def test_make_cipher_none_without_key():
     fake = types.SimpleNamespace(_key_content=None, _key_iv=None, _media_sequence=0)
     assert M3U8Crawler._make_cipher(fake, 0) is None
+
+
+def test_crawler_source_subtitle_evidence_is_bound_to_its_source_site():
+    crawler = object.__new__(M3U8Crawler)
+    crawler._url = 'https://jable.tv/videos/ipzz-905/'
+    crawler._source_subtitle_evidence = ()
+
+    crawler.add_source_subtitle_evidence(
+        ('missav-category-chinese-subtitle',))
+    assert crawler.source_subtitle_evidence() == ()
+
+    crawler.add_source_subtitle_evidence(
+        ('jable-category-chinese-subtitle',))
+    assert crawler.source_subtitle_evidence() == (
+        'jable-category-chinese-subtitle',)
