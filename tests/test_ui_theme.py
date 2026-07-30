@@ -55,7 +55,7 @@ def test_primary_text_contrast_is_accessible_in_both_themes():
 
 
 def test_current_version_and_global_smalltool_copy_are_complete():
-    assert gui_modern.APP_VERSION == jable_smalltool.APP_VERSION == '2.5.37'
+    assert gui_modern.APP_VERSION == jable_smalltool.APP_VERSION == '2.5.38'
     required = {
         'st_activity', 'st_progress_idle', 'st_footer_short',
         'st_categories_expand', 'st_categories_collapse',
@@ -77,7 +77,7 @@ def test_current_version_and_global_smalltool_copy_are_complete():
         'st_scan_queued', 'st_waiting_schedule', 'st_stopping',
     }
     for language, strings in locales.STRINGS.items():
-        assert strings['version_label'] == 'v2.5.37', language
+        assert strings['version_label'] == 'v2.5.38', language
         assert required <= strings.keys(), language
 
 
@@ -85,17 +85,112 @@ def test_windows_version_resources_match_app_version():
     root = Path(__file__).resolve().parents[1]
     workflow = (root / '.github' / 'workflows' / 'windows-build.yml').read_text(
         encoding='utf-8')
-    assert '$expected = "2.5.37.0"' in workflow
+    assert '$expected = "2.5.38.0"' in workflow
     generator = (root / 'build_tmp' / 'gen_version.py').read_text(
         encoding='utf-8')
-    assert 'VERSION = (2, 5, 37, 0)' in generator
+    assert 'VERSION = (2, 5, 38, 0)' in generator
     for name in ('JableTV_Modern.version', 'Jable_smalltool.version'):
         resource = (root / 'build_tmp' / name).read_text(encoding='utf-8')
-        assert 'filevers=(2, 5, 37, 0)' in resource
-        assert "StringStruct('FileVersion', '2.5.37.0')" in resource
+        assert 'filevers=(2, 5, 38, 0)' in resource
+        assert "StringStruct('FileVersion', '2.5.38.0')" in resource
     for name in ('JableTV_Modern.spec', 'Jable_smalltool.spec'):
         spec = (root / 'build_tmp' / name).read_text(encoding='utf-8')
         assert "'numpy._core._exceptions'" in spec
+
+
+def test_windows_distribution_is_hardened_and_verifiable():
+    root = Path(__file__).resolve().parents[1]
+    modern_spec = (
+        root / 'build_tmp' / 'JableTV_Modern.spec'
+    ).read_text(encoding='utf-8')
+    smalltool_spec = (
+        root / 'build_tmp' / 'Jable_smalltool.spec'
+    ).read_text(encoding='utf-8')
+    workflow = (
+        root / '.github' / 'workflows' / 'windows-build.yml'
+    ).read_text(encoding='utf-8')
+
+    for spec in (modern_spec, smalltool_spec):
+        assert 'upx=False' in spec
+        assert 'upx=True' not in spec
+
+    # SmallTool has no update UI.  Do not bundle Modern's executable
+    # downloader/self-replacement helper into its archive.
+    assert "'updater'" in modern_spec
+    assert "'updater'" not in smalltool_spec
+
+    # Keep the convenient one-file build, but also ship a SmallTool onedir
+    # fallback that does not self-extract through a _MEI directory.
+    assert 'exclude_binaries=True' in smalltool_spec
+    assert 'COLLECT(' in smalltool_spec
+    assert "name='Jable_smalltool_portable'" in smalltool_spec
+    assert "portable = '--portable' in sys.argv" in smalltool_spec
+    assert 'Jable_smalltool.spec -- --portable' in workflow
+
+    # The official PyInstaller guidance recommends rebuilding its bootloader
+    # from source to reduce false positives tied to widely shared bootloaders.
+    assert 'PYINSTALLER_COMPILE_BOOTLOADER' in workflow
+    assert '--no-binary=PyInstaller' in workflow
+    assert 'pip uninstall --yes PyInstaller' in workflow
+    assert 'pip cache remove PyInstaller' in workflow
+    # Keep the previously qualified PyInstaller release for this hotfix;
+    # only the bootloader provenance changes.
+    assert 'pyinstaller==6.13.0' in workflow.lower()
+
+    # Checksums and provenance help users verify origin.  They do not replace
+    # Authenticode and must remain separate from malware-detection claims.
+    assert 'Jable_smalltool_portable.zip' in workflow
+    assert 'SHA256SUMS.txt' in workflow
+    assert '-Path "dist\\Jable_smalltool_portable"' in workflow
+    assert '-Path "dist\\Jable_smalltool_portable\\*"' not in workflow
+    assert 'actions/attest@v4' in workflow
+    assert 'attestations: write' in workflow
+    for documentation in (
+        '"README.md"',
+        '"README.en.md"',
+        '"THIRD_PARTY_NOTICES.md"',
+        '"WINDOWS_SECURITY.md"',
+    ):
+        assert documentation in workflow
+
+
+def test_windows_security_guidance_does_not_ask_for_defender_bypass():
+    root = Path(__file__).resolve().parents[1]
+    traditional = (root / 'README.md').read_text(encoding='utf-8')
+    english = (root / 'README.en.md').read_text(encoding='utf-8')
+    security_path = root / 'WINDOWS_SECURITY.md'
+
+    assert security_path.is_file()
+    security = security_path.read_text(encoding='utf-8')
+    combined = '\n'.join((traditional, english, security))
+
+    assert 'Jable_smalltool_portable.zip' in combined
+    assert 'SHA256SUMS.txt' in security
+    assert 'Get-FileHash' in security
+    assert 'gh attestation verify' in security
+    assert (
+        'gh attestation verify .\\Jable_smalltool_portable.zip'
+        in security)
+    assert 'https://www.microsoft.com/wdsi/filesubmission' in security
+    assert 'SmartScreen' in security
+    assert 'Defender Antivirus' in security
+    assert '未簽章' in security
+    assert 'unsigned' in security.lower()
+    assert '不要為了上傳而自行還原隔離檔' in security
+    assert 'Do not restore a quarantined file merely to upload it' in security
+    assert '若備用包也被偵測，請停止並回報' in traditional
+    assert 'stop and report it if the fallback is also detected' in english
+
+    lowered = combined.lower()
+    for unsafe_advice in (
+        'disable defender',
+        'turn off defender',
+        'add a broad exclusion',
+        '停用 defender',
+        '關閉 defender',
+        '整個資料夾加入排除',
+    ):
+        assert unsafe_advice not in lowered
 
 
 def test_modern_defers_initial_workers_until_mainloop():

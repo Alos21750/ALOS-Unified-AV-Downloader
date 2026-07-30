@@ -1,4 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
+import sys
 from pathlib import Path
 
 from PyInstaller.utils.hooks import collect_all, copy_metadata
@@ -9,7 +10,7 @@ hiddenimports = [
     'cloudscraper', 'Crypto.Cipher.AES', 'm3u8',
     'imageio_ffmpeg', 'imageio_ffmpeg.binaries',
     'curl_cffi', '_cffi_backend', 'crashlog', 'certifi', 'faulthandler',
-    'updater', 'ssl_util', 'subtitle_engine', 'subtitle_domain',
+    'ssl_util', 'subtitle_engine', 'subtitle_domain',
     'llm_translation', 'translation_settings', 'translation_settings_ui',
     'ctranslate2', 'ctranslate2._ext',
     'numpy._core._exceptions',
@@ -63,24 +64,62 @@ a = Analysis(
 )
 pyz = PYZ(a.pure)
 
-exe = EXE(
-    pyz,
-    a.scripts,
-    a.binaries,
-    a.datas,
-    [],
-    name='Jable_smalltool',
-    debug=False,
-    bootloader_ignore_signals=False,
-    strip=False,
-    upx=True,
-    upx_exclude=['libiomp5md.dll', 'ctranslate2.dll', '_ext*.pyd'],
-    runtime_tmpdir=None,
-    console=False,
-    disable_windowed_traceback=False,
-    argv_emulation=False,
-    target_arch=None,
-    codesign_identity=None,
-    entitlements_file=None,
-    version='Jable_smalltool.version',
-)
+# PyInstaller forwards arguments after ``--`` to the spec.  Building the two
+# layouts in separate invocations keeps their PKG/work files isolated while
+# preserving the canonical Jable_smalltool.exe name and version metadata.
+portable = '--portable' in sys.argv
+
+if portable:
+    exe = EXE(
+        pyz,
+        a.scripts,
+        [],
+        exclude_binaries=True,
+        name='Jable_smalltool',
+        debug=False,
+        bootloader_ignore_signals=False,
+        strip=False,
+        upx=False,
+        upx_exclude=[],
+        runtime_tmpdir=None,
+        console=False,
+        disable_windowed_traceback=False,
+        argv_emulation=False,
+        target_arch=None,
+        codesign_identity=None,
+        entitlements_file=None,
+        version='Jable_smalltool.version',
+    )
+    portable_bundle = COLLECT(
+        exe,
+        a.binaries,
+        a.datas,
+        strip=False,
+        upx=False,
+        upx_exclude=[],
+        name='Jable_smalltool_portable',
+    )
+else:
+    exe = EXE(
+        pyz,
+        a.scripts,
+        a.binaries,
+        a.datas,
+        [],
+        name='Jable_smalltool',
+        debug=False,
+        bootloader_ignore_signals=False,
+        strip=False,
+        # Do not allow a runner-local UPX installation to change the release
+        # binary or increase the antivirus heuristic surface.
+        upx=False,
+        upx_exclude=[],
+        runtime_tmpdir=None,
+        console=False,
+        disable_windowed_traceback=False,
+        argv_emulation=False,
+        target_arch=None,
+        codesign_identity=None,
+        entitlements_file=None,
+        version='Jable_smalltool.version',
+    )

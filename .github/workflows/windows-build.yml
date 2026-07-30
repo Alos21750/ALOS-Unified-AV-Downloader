@@ -9,6 +9,9 @@ on:
       - "M3U8Sites/**"
       - "build_tmp/**"
       - "THIRD_PARTY_NOTICES.md"
+      - "README.md"
+      - "README.en.md"
+      - "WINDOWS_SECURITY.md"
       - "third_party_licenses/**"
       - "scripts/**"
       - "requirements.txt"
@@ -17,6 +20,8 @@ on:
 
 permissions:
   contents: read
+  id-token: write
+  attestations: write
 
 jobs:
   build:
@@ -34,9 +39,42 @@ jobs:
           cache: pip
 
       - name: Install dependencies
+        shell: pwsh
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install -r requirements.txt pyinstaller==6.13.0 pytest pytest-timeout
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install -r requirements.txt pytest pytest-timeout
+
+          New-Item -ItemType Directory -Force -Path .build-deps | Out-Null
+          python -m pip download `
+            --no-deps `
+            --no-cache-dir `
+            --no-binary=PyInstaller `
+            --dest .build-deps `
+            pyinstaller==6.13.0
+          $sdist = Get-Item -LiteralPath `
+            ".build-deps\pyinstaller-6.13.0.tar.gz"
+          $expectedSdist = "38911feec2c5e215e5159a7e66fdb12400168bd116143b54a8a7a37f08733456"
+          $actualSdist = (
+            Get-FileHash -Algorithm SHA256 -LiteralPath $sdist.FullName
+          ).Hash.ToLowerInvariant()
+          if ($actualSdist -ne $expectedSdist) {
+            throw "PyInstaller sdist hash mismatch"
+          }
+
+          # PyInstaller's bootloader guide requires removing any previously
+          # installed copy and cached wheel before forcing a source rebuild.
+          python -m pip uninstall --yes PyInstaller
+          python -m pip cache remove PyInstaller
+          $env:PYINSTALLER_COMPILE_BOOTLOADER = "1"
+          try {
+            python -m pip install `
+              --no-cache-dir `
+              --verbose `
+              $sdist.FullName
+          } finally {
+            Remove-Item Env:PYINSTALLER_COMPILE_BOOTLOADER -ErrorAction SilentlyContinue
+          }
+          python -c "import struct, PyInstaller; assert PyInstaller.__version__ == '6.13.0'; assert struct.calcsize('P') == 8"
 
       - name: Run tests
         run: python -m pytest tests/ -q --timeout=20
@@ -47,26 +85,69 @@ jobs:
           New-Item -ItemType Directory -Force -Path dist, build | Out-Null
           Push-Location build_tmp
           python -m PyInstaller --noconfirm --clean --distpath ..\dist --workpath ..\build JableTV_Modern.spec
-          python -m PyInstaller --noconfirm --clean --distpath ..\dist --workpath ..\build Jable_smalltool.spec
+          python -m PyInstaller --noconfirm --clean --distpath ..\dist --workpath ..\build\smalltool-onefile Jable_smalltool.spec
+          python -m PyInstaller --noconfirm --clean --distpath ..\dist --workpath ..\build\smalltool-portable Jable_smalltool.spec -- --portable
           Pop-Location
+          Compress-Archive `
+            -Path "dist\Jable_smalltool_portable" `
+            -DestinationPath "dist\Jable_smalltool_portable.zip" `
+            -CompressionLevel Optimal
+
+          $assetNames = @(
+            "JableTV_Modern.exe",
+            "Jable_smalltool.exe",
+            "Jable_smalltool_portable.zip"
+          )
+          $checksums = foreach ($name in $assetNames) {
+            $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath "dist\$name").Hash
+            "$($hash.ToLowerInvariant())  $name"
+          }
+          [System.IO.File]::WriteAllLines(
+            (Join-Path (Resolve-Path "dist") "SHA256SUMS.txt"),
+            $checksums,
+            [System.Text.UTF8Encoding]::new($false)
+          )
 
       - name: Verify executable metadata
         shell: pwsh
         run: |
-          $expected = "2.5.37.0"
-          $files = @("dist\JableTV_Modern.exe", "dist\Jable_smalltool.exe")
+          $expected = "2.5.38.0"
+          $files = @(
+            "dist\JableTV_Modern.exe",
+            "dist\Jable_smalltool.exe",
+            "dist\Jable_smalltool_portable\Jable_smalltool.exe"
+          )
           foreach ($file in $files) {
             if (!(Test-Path -LiteralPath $file)) { throw "Missing $file" }
             $version = (Get-Item -LiteralPath $file).VersionInfo.FileVersion
             if ($version -ne $expected) { throw "$file version $version; expected $expected" }
             Write-Host "$file $version $((Get-Item -LiteralPath $file).Length) bytes"
           }
+          foreach ($file in @(
+            "dist\Jable_smalltool_portable.zip",
+            "dist\SHA256SUMS.txt"
+          )) {
+            if (!(Test-Path -LiteralPath $file)) { throw "Missing $file" }
+          }
+
+      - name: Generate artifact attestation
+        uses: actions/attest@v4
+        with:
+          subject-path: |
+            dist/JableTV_Modern.exe
+            dist/Jable_smalltool.exe
+            dist/Jable_smalltool_portable.zip
+            dist/SHA256SUMS.txt
 
       - name: Upload Windows executables
         uses: actions/upload-artifact@v4
         with:
           name: jabletv-windows-${{ github.sha }}
-          path: dist/*.exe
+          path: |
+            dist/JableTV_Modern.exe
+            dist/Jable_smalltool.exe
+            dist/Jable_smalltool_portable.zip
+            dist/SHA256SUMS.txt
           if-no-files-found: error
           compression-level: 0
           retention-days: 7

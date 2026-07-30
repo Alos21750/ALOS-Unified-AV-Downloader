@@ -23,6 +23,8 @@
   ·
   <strong><a href="https://github.com/Alos21750/JableTV-MissAV-Downloader-GUI-2026/releases/latest/download/Jable_smalltool.exe">下載 SmallTool</a></strong>
   ·
+  <a href="https://github.com/Alos21750/JableTV-MissAV-Downloader-GUI-2026/releases/latest">SmallTool portable ZIP（v2.5.38 起）</a>
+  ·
   <a href="https://github.com/Alos21750/JableTV-MissAV-Downloader-GUI-2026/releases/latest">查看最新版本</a>
 </p>
 
@@ -39,6 +41,7 @@
 |---|---|---|
 | 想瀏覽、搜尋、逐片挑選 | **JableTV_Modern.exe** | 看片卡、複選、加入佇列或直接下載 |
 | 想追蹤特定分類的新片 | **Jable_smalltool.exe** | 選網站、分類、日期與版本優先，開始監控 |
+| Defender 對 one-file SmallTool 發出偵測 | **Jable_smalltool_portable.zip** | 先核對雜湊與偵測資訊，再評估不需臨時自解壓的備用包；若備用包也被偵測，請停止並回報 |
 | 想在 NAS／伺服器無介面執行 | **Docker / CLI** | 傳入一個或多個網址，或掛載 `urls.txt` |
 
 不確定時先下載 **Modern**。兩個 Windows 執行檔都免安裝 Python，Release 版本已包含 ffmpeg。
@@ -49,7 +52,7 @@
 2. 把檔案放在可寫入的資料夾，直接雙擊執行。
 3. 首次開啟選擇語言；之後可隨時切換繁體中文、简体中文、English、日本語與明／暗主題。
 
-若 Windows SmartScreen 出現提醒，請先確認檔案來自本專案的 **Releases**，再選「其他資訊」→「仍要執行」。
+SmartScreen 信譽提醒與 Defender Antivirus 隔離是不同事件。請先閱讀 [Windows 下載與安全驗證](./WINDOWS_SECURITY.md)：核對 `SHA256SUMS.txt` 與 GitHub provenance；若 Defender 顯示 threat name，請勿直接降低防護設定。
 
 ## Modern：瀏覽、挑選、下載
 

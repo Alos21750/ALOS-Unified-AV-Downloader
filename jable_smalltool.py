@@ -236,7 +236,7 @@ except Exception:
 
 # ── Constants ────────────────────────────────────────────────────────
 APP_NAME = 'Jable_smalltool'
-APP_VERSION = '2.5.37'
+APP_VERSION = '2.5.38'
 DEFAULT_WINDOW_WIDTH = 1180
 DEFAULT_WINDOW_HEIGHT = 780
 MIN_WINDOW_WIDTH = 760

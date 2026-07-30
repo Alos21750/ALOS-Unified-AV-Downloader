@@ -78,8 +78,10 @@ exe = EXE(
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
-    upx_exclude=['libiomp5md.dll', 'ctranslate2.dll', '_ext*.pyd'],
+    # Do not allow a runner-local UPX installation to change the release
+    # binary or increase the antivirus heuristic surface.
+    upx=False,
+    upx_exclude=[],
     runtime_tmpdir=None,
     console=False,
     disable_windowed_traceback=False,

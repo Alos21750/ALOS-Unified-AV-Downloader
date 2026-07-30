@@ -23,6 +23,8 @@
   ·
   <strong><a href="https://github.com/Alos21750/JableTV-MissAV-Downloader-GUI-2026/releases/latest/download/Jable_smalltool.exe">Download SmallTool</a></strong>
   ·
+  <a href="https://github.com/Alos21750/JableTV-MissAV-Downloader-GUI-2026/releases/latest">SmallTool portable ZIP (v2.5.38+)</a>
+  ·
   <a href="https://github.com/Alos21750/JableTV-MissAV-Downloader-GUI-2026/releases/latest">View the latest release</a>
 </p>
 
@@ -39,6 +41,7 @@
 |---|---|---|
 | Browse, search, and pick individual videos | **JableTV_Modern.exe** | Browse cards, multi-select, queue, or download now |
 | Follow new items from selected categories | **Jable_smalltool.exe** | Choose sites, categories, a date, and version priority, then monitor |
+| Defender reports a detection on the one-file SmallTool | **Jable_smalltool_portable.zip** | Verify the hash and detection details before evaluating the fallback that does not temporarily self-extract; stop and report it if the fallback is also detected |
 | Run headlessly on a NAS or server | **Docker / CLI** | Pass one or more URLs, or mount a `urls.txt` file |
 
 If you are unsure, start with **Modern**. Both Windows executables are portable, need no Python installation, and include ffmpeg in the release build.
@@ -49,7 +52,7 @@ If you are unsure, start with **Modern**. Both Windows executables are portable,
 2. Put the file in a writable folder and double-click it.
 3. Pick a language on first launch. You can later switch among English, 繁體中文, 简体中文, 日本語, plus light and dark themes.
 
-If Windows SmartScreen appears, first verify that the file came from this project's **Releases** page, then choose “More info” → “Run anyway.”
+SmartScreen reputation warnings and Defender Antivirus quarantine are different events. Read [Windows download and security verification](./WINDOWS_SECURITY.md) first: verify `SHA256SUMS.txt` and GitHub provenance, and do not weaken protection when Defender reports a threat name.
 
 ## Modern: browse, pick, download
 

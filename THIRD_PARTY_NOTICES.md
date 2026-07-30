@@ -38,8 +38,14 @@ The bundled CTranslate2 Windows runtime includes Intel OpenMP
 `libiomp5md.dll`. Intel permits redistribution of the relevant oneAPI runtime
 components under the Intel Simplified Software License. The executable bundles
 the complete applicable notice and terms at
-`third_party_licenses/Intel-Simplified-Software-License.txt`. The native Intel
-runtime is excluded from UPX or other binary modification.
+`third_party_licenses/Intel-Simplified-Software-License.txt`. The Windows
+release workflow disables UPX for all collected binaries. In particular,
+`libiomp5md.dll` is redistributed without UPX transformation.
+
+Windows executables are packaged with PyInstaller 6.13.0. The release workflow
+builds its bootloader from the corresponding source distribution. PyInstaller
+is licensed under GPL-2.0-or-later with a bootloader exception:
+<https://github.com/pyinstaller/pyinstaller/blob/v6.13.0/COPYING.txt>.
 
 CTranslate2 imports NumPy and PyYAML at runtime. The Windows executable pins
 and bundles NumPy 2.5.1 under its BSD-3-Clause license and PyYAML 6.0.3 under
