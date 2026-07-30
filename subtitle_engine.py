@@ -135,12 +135,12 @@ REAZONSPEECH_PACK_URL = (
     f'releases/download/{REAZONSPEECH_PACK_RELEASE_TAG}/'
     f'{REAZONSPEECH_PACK_NAME}'
 )
-REAZONSPEECH_PACK_SIZE = 186_185_998
+REAZONSPEECH_PACK_SIZE = 186_186_197
 REAZONSPEECH_PACK_SHA256 = (
-    '64ed98f3779ba9aca5c271e4b03e4bed6ac74cfaadb3a8d69854dc4f234a729e'
+    'cf55e5485e14715beee6e0b12ca2b0998ad73ec755513e80138fa5161693c700'
 )
 REAZONSPEECH_MANIFEST_SHA256 = (
-    'f7e7c4675a4186786d8490e9881796e61ab611a953398605de88fd26a5082181'
+    'dceb4ab39275828596eebe6148243ef12cd88a8e2c9a9bef7c9f69a1d61b652c'
 )
 REAZONSPEECH_MODEL_NAME = 'reazonspeech-k2-v2-hybrid-int8-fp32'
 # The immutable pack manifest is the canonical model/runtime identity. Keeping
@@ -165,8 +165,8 @@ REAZONSPEECH_REQUIRED_FILES = {
         '0e07b95f3a8d6230037707c5c4a2b554d12c4cb67369669ac255635528ffcee2',
     ),
     'model/MODEL_CARD.md': (
-        1_274,
-        'fd5bd3fc21f308d363ecebaea5a09dba477796c43d72609761314d505a1c4577',
+        1_188,
+        '7debad4c9430f3310ad6d119fce385787c1c19f3ebc0cabe685a48dbe72a4de0',
     ),
     'model/decoder-epoch-99-avg-1.onnx': (
         11_767_836,

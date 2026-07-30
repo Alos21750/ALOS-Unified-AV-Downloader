@@ -110,6 +110,14 @@ def test_pack_is_byte_reproducible_and_records_mixed_licenses(
     assert {item['license'] for item in manifest['licenses']} == {
         'Apache-2.0', 'MIT',
     }
+    assert (
+        manifest['model']['model_card_url']
+        == builder.REAZON_MODEL_CARD_URL
+    )
+    assert (
+        manifest['model']['files']['MODEL_CARD.md']
+        == builder.REAZON_MODEL_CARD_URL
+    )
     assert manifest['model']['license'] == 'Apache-2.0'
     assert manifest['runtime']['license'] == 'Apache-2.0'
     assert manifest['runtime']['onnx_runtime']['license'] == 'MIT'

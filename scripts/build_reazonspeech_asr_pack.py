@@ -38,7 +38,7 @@ SHERPA_RELEASE_URL = (
 )
 
 REAZON_MODEL_REVISION = "291488c8151be24d7da4bf7af26e533fad96e407"
-REAZON_MODEL_CARD_URL = (
+REAZON_MODEL_SOURCE_URL = (
     "https://huggingface.co/reazon-research/reazonspeech-k2-v2/tree/"
     f"{REAZON_MODEL_REVISION}"
 )
@@ -46,6 +46,7 @@ REAZON_MODEL_FILE_URL_PREFIX = (
     "https://huggingface.co/reazon-research/reazonspeech-k2-v2/resolve/"
     f"{REAZON_MODEL_REVISION}/"
 )
+REAZON_MODEL_CARD_URL = REAZON_MODEL_FILE_URL_PREFIX + "README.md"
 ONNX_RUNTIME_VERSION = "1.27.0"
 ONNX_RUNTIME_COMMIT = "8f0278c77bf44b0cc83c098c6c722b92a36ac4b5"
 
@@ -82,8 +83,8 @@ MODEL_FILES = {
         "49cc7ea1d3d35a40a27442db5e89996da64bf0e683a903dce76e99e57a12e4de",
     ),
     "README.md": (
-        1_274,
-        "fd5bd3fc21f308d363ecebaea5a09dba477796c43d72609761314d505a1c4577",
+        1_188,
+        "7debad4c9430f3310ad6d119fce385787c1c19f3ebc0cabe685a48dbe72a4de0",
     ),
 }
 
@@ -240,15 +241,16 @@ def build_pack(
         "model": {
             "architecture": "Zipformer RNN-T",
             "files": {
-                name: REAZON_MODEL_FILE_URL_PREFIX + name
+                ("MODEL_CARD.md" if name == "README.md" else name):
+                    REAZON_MODEL_FILE_URL_PREFIX + name
                 for name in MODEL_FILES
-                if name != "README.md"
             },
+            "model_card_url": REAZON_MODEL_CARD_URL,
             "path": "model",
             "quantization": "INT8 encoder/joiner with FP32 decoder",
             "repository": "reazon-research/reazonspeech-k2-v2",
             "revision": REAZON_MODEL_REVISION,
-            "source_url": REAZON_MODEL_CARD_URL,
+            "source_url": REAZON_MODEL_SOURCE_URL,
             "license": "Apache-2.0",
             "license_path": "licenses/Apache-2.0.txt",
         },

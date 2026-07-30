@@ -24,6 +24,11 @@ not train or fine-tune them. The pack's `manifest.json` records the mixed
 licensing, source revisions, original sherpa-onnx release-archive hash, and
 the size and SHA-256 of every extracted file.
 
+`model/MODEL_CARD.md` is the exact `README.md` fetched from the immutable
+ReazonSpeech revision linked above. It is not sourced from a separately
+packaged model archive; its pinned URL, size, and SHA-256 are recorded and
+verified independently.
+
 The complete notices are included inside the optional archive:
 
 - `licenses/Apache-2.0.txt` covers the ReazonSpeech model and sherpa-onnx.

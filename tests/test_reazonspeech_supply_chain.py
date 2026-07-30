@@ -7,18 +7,28 @@ ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / '.github' / 'workflows' / 'windows-build.yml'
 
 PACK_NAME = 'Jable_reazonspeech_asr_v1.zip'
-PACK_SIZE = 186_185_998
+PACK_SIZE = 186_186_197
 PACK_SHA256 = (
-    '64ed98f3779ba9aca5c271e4b03e4bed6ac74cfaadb3a8d69854dc4f234a729e'
+    'cf55e5485e14715beee6e0b12ca2b0998ad73ec755513e80138fa5161693c700'
 )
 MANIFEST_SHA256 = (
-    'f7e7c4675a4186786d8490e9881796e61ab611a953398605de88fd26a5082181'
+    'dceb4ab39275828596eebe6148243ef12cd88a8e2c9a9bef7c9f69a1d61b652c'
 )
 
 
 def test_windows_ci_builds_only_the_pinned_reazonspeech_inputs():
     workflow = WORKFLOW.read_text(encoding='utf-8')
 
+    assert builder.REAZON_MODEL_CARD_URL == (
+        'https://huggingface.co/reazon-research/reazonspeech-k2-v2/'
+        'resolve/291488c8151be24d7da4bf7af26e533fad96e407/README.md'
+    )
+    assert builder.MODEL_FILES['README.md'] == (
+        1_188,
+        '7debad4c9430f3310ad6d119fce385787c1c19f3ebc0cabe685a48dbe72a4de0',
+    )
+    assert builder.REAZON_MODEL_FILE_URL_PREFIX in workflow
+    assert '@("README.md", 1188,' in workflow
     assert builder.SHERPA_COMMIT in workflow
     assert builder.REAZON_MODEL_REVISION in workflow
     assert builder.ONNX_RUNTIME_COMMIT in workflow

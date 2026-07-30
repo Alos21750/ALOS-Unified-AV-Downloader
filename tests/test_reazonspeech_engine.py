@@ -102,6 +102,12 @@ def test_reazonspeech_model_identity_is_the_verified_manifest():
     assert subtitles.REAZONSPEECH_MODEL_SHA256 == (
         subtitles.REAZONSPEECH_MANIFEST_SHA256)
     assert subtitles.recognition_profile('auto').engine == 'reazonspeech'
+    assert subtitles.REAZONSPEECH_REQUIRED_FILES[
+        'model/MODEL_CARD.md'
+    ] == (
+        1_188,
+        '7debad4c9430f3310ad6d119fce385787c1c19f3ebc0cabe685a48dbe72a4de0',
+    )
 
 
 def test_prepare_runtime_auto_installs_reazon_without_whisper_model(
