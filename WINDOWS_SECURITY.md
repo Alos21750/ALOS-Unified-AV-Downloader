@@ -4,11 +4,12 @@
 
 ### 官方資產
 
-只從本專案的 [GitHub Releases](https://github.com/Alos21750/JableTV-MissAV-Downloader-GUI-2026/releases) 下載。自 v2.5.38 起，Windows Release 預計提供：
+只從本專案的 [GitHub Releases](https://github.com/Alos21750/JableTV-MissAV-Downloader-GUI-2026/releases) 下載。自 v2.5.38 起，Windows Release 提供可驗證的程式資產；v2.5.39 起另包含預設 CPU 字幕辨識包：
 
 - `JableTV_Modern.exe`
 - `Jable_smalltool.exe`
 - `Jable_smalltool_portable.zip`：不使用 one-file 臨時自解壓流程的 SmallTool 備用版本
+- `Jable_reazonspeech_asr_v1.zip`：預設「自動」字幕辨識首次使用時下載的 CPU 模型包
 - `SHA256SUMS.txt`
 
 先用 `SHA256SUMS.txt` 核對檔案雜湊：
@@ -24,6 +25,9 @@ gh attestation verify .\Jable_smalltool.exe `
   -R Alos21750/JableTV-MissAV-Downloader-GUI-2026
 
 gh attestation verify .\Jable_smalltool_portable.zip `
+  -R Alos21750/JableTV-MissAV-Downloader-GUI-2026
+
+gh attestation verify .\Jable_reazonspeech_asr_v1.zip `
   -R Alos21750/JableTV-MissAV-Downloader-GUI-2026
 ```
 
@@ -59,11 +63,12 @@ gh attestation verify .\Jable_smalltool_portable.zip `
 
 ### Official assets
 
-Download only from this project's [GitHub Releases](https://github.com/Alos21750/JableTV-MissAV-Downloader-GUI-2026/releases). Starting with v2.5.38, a Windows release is expected to include:
+Download only from this project's [GitHub Releases](https://github.com/Alos21750/JableTV-MissAV-Downloader-GUI-2026/releases). Starting with v2.5.38, Windows releases provide verifiable application assets; v2.5.39 also includes the default CPU speech-recognition pack:
 
 - `JableTV_Modern.exe`
 - `Jable_smalltool.exe`
 - `Jable_smalltool_portable.zip`, an onedir fallback without one-file temporary extraction
+- `Jable_reazonspeech_asr_v1.zip`, the CPU recognition pack downloaded on first use of the default Auto subtitle profile
 - `SHA256SUMS.txt`
 
 Compare the downloaded file with `SHA256SUMS.txt`:
@@ -79,6 +84,9 @@ gh attestation verify .\Jable_smalltool.exe `
   -R Alos21750/JableTV-MissAV-Downloader-GUI-2026
 
 gh attestation verify .\Jable_smalltool_portable.zip `
+  -R Alos21750/JableTV-MissAV-Downloader-GUI-2026
+
+gh attestation verify .\Jable_reazonspeech_asr_v1.zip `
   -R Alos21750/JableTV-MissAV-Downloader-GUI-2026
 ```
 

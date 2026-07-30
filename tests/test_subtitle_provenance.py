@@ -1,5 +1,6 @@
 import shutil
 
+import config
 import subtitle_engine as subtitles
 
 
@@ -12,6 +13,8 @@ def test_managed_asr_is_reused_until_downloaded_media_changes(
     video = tmp_path / 'movie.mp4'
     video.write_bytes(b'first video')
     calls = []
+    monkeypatch.setattr(
+        config, 'get_recognition_quality', lambda: 'quality')
     monkeypatch.setattr(
         subtitles, '_prepare_runtime',
         lambda *_args: ('whisper.exe', 'model.bin', 'vad.bin'))
@@ -118,6 +121,8 @@ def test_no_speech_removes_only_an_obsolete_app_owned_sidecar(
     video = tmp_path / 'movie.mp4'
     japanese = tmp_path / 'movie.ja.srt'
     video.write_bytes(b'first video')
+    monkeypatch.setattr(
+        config, 'get_recognition_quality', lambda: 'quality')
     monkeypatch.setattr(
         subtitles, '_prepare_runtime',
         lambda *_args: ('whisper.exe', 'model.bin', 'vad.bin'))

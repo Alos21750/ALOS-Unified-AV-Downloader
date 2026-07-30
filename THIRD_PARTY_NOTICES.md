@@ -1,5 +1,40 @@
 # Third-party notices
 
+## Optional local Japanese speech-recognition pack
+
+The optional `Jable_reazonspeech_asr_v1.zip` archive is a mixed-license,
+CPU-only Japanese speech-recognition pack. It contains only the pinned model
+and Windows runtime files used by Jable:
+
+| Component | Immutable source revision | License |
+| --- | --- | --- |
+| `reazon-research/reazonspeech-k2-v2` | `291488c8151be24d7da4bf7af26e533fad96e407` | Apache License 2.0 |
+| `k2-fsa/sherpa-onnx` v1.13.4 | `142807252687d81b40d6315f23470a1512a00de3` | Apache License 2.0 |
+| ONNX Runtime 1.27.0 | `8f0278c77bf44b0cc83c098c6c722b92a36ac4b5` | MIT |
+
+Immutable source pages:
+
+- <https://huggingface.co/reazon-research/reazonspeech-k2-v2/tree/291488c8151be24d7da4bf7af26e533fad96e407>
+- <https://github.com/k2-fsa/sherpa-onnx/tree/142807252687d81b40d6315f23470a1512a00de3>
+- <https://github.com/microsoft/onnxruntime/tree/8f0278c77bf44b0cc83c098c6c722b92a36ac4b5>
+
+The ReazonSpeech checkpoint uses an INT8 encoder and joiner with an FP32
+decoder. This project repackages the upstream checkpoint and runtime; it does
+not train or fine-tune them. The pack's `manifest.json` records the mixed
+licensing, source revisions, original sherpa-onnx release-archive hash, and
+the size and SHA-256 of every extracted file.
+
+The complete notices are included inside the optional archive:
+
+- `licenses/Apache-2.0.txt` covers the ReazonSpeech model and sherpa-onnx.
+- `licenses/ONNXRuntime-MIT.txt` contains the ONNX Runtime MIT license.
+- `licenses/ONNXRuntime-ThirdPartyNotices.txt` contains ONNX Runtime's complete
+  third-party notices from the pinned version.
+
+The speech-recognition pack is an optional download and is not part of the
+source archive. Its components remain subject to their respective licenses and
+model-card terms.
+
 ## Optional local subtitle-translation model pack
 
 The optional `Jable_local_translation_v1.zip` archive contains converted,

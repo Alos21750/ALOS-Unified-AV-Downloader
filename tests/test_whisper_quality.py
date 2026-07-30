@@ -47,22 +47,22 @@ def _cli_segment(start_ms, end_ms, text='同じ言葉'):
     }
 
 
-def test_default_recognition_quality_is_not_the_legacy_base_model():
+def test_default_recognition_quality_uses_the_cpu_auto_engine():
     profile = subtitles.recognition_profile(config.get_recognition_quality())
 
-    assert profile.key == 'quality'
-    assert profile.model_name == 'ggml-large-v3-turbo-q5_0.bin'
-    assert profile.model_size == 574_041_195
-    assert profile.model_sha256 == (
-        '394221709cd5ad1f40c46e6031ca61bce88931e6e088c188294c6d5a55ffa7e2')
+    assert profile.key == 'auto'
+    assert profile.engine == 'reazonspeech'
+    assert profile.model_name == subtitles.REAZONSPEECH_MODEL_NAME
+    assert profile.model_size == subtitles.REAZONSPEECH_PACK_SIZE
+    assert profile.model_sha256 == subtitles.REAZONSPEECH_MANIFEST_SHA256
 
 
 def test_recognition_quality_normalization_keeps_a_safe_default():
-    assert subtitles.normalize_recognition_quality(None) == 'quality'
+    assert subtitles.normalize_recognition_quality(None) == 'auto'
     assert subtitles.normalize_recognition_quality('precise') == 'quality'
     assert subtitles.normalize_recognition_quality('balanced') == 'balanced'
     assert subtitles.normalize_recognition_quality('fast') == 'fast'
-    assert subtitles.normalize_recognition_quality('unknown') == 'quality'
+    assert subtitles.normalize_recognition_quality('unknown') == 'auto'
 
 
 def test_recognition_profiles_pin_all_three_lazy_models():
@@ -634,6 +634,8 @@ def test_generate_reports_no_speech_without_hallucinated_sidecars(
     video = tmp_path / 'movie.mp4'
     video.write_bytes(b'video')
     monkeypatch.setattr(
+        config, 'get_recognition_quality', lambda: 'quality')
+    monkeypatch.setattr(
         subtitles, '_prepare_runtime',
         lambda *_args: ('whisper.exe', 'model.bin', 'vad.bin'))
     monkeypatch.setattr(
@@ -722,6 +724,8 @@ def test_stale_app_generated_japanese_is_retranscribed(
     stale_sha = subtitles._sha256(str(japanese))
     manifest = _write_stale_manifest(video, 'ja', japanese, stale_sha)
     calls = []
+    monkeypatch.setattr(
+        config, 'get_recognition_quality', lambda: 'quality')
 
     monkeypatch.setattr(
         subtitles, '_prepare_runtime',
@@ -760,6 +764,8 @@ def test_profile_change_invalidates_app_generated_derived_subtitle(
     stale_sha = subtitles._sha256(str(english))
     manifest = _write_stale_manifest(video, 'en', english, stale_sha)
     calls = []
+    monkeypatch.setattr(
+        config, 'get_recognition_quality', lambda: 'quality')
 
     monkeypatch.setattr(
         subtitles, '_prepare_runtime',

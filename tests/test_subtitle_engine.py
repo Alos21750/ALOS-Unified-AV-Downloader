@@ -10,6 +10,7 @@ from types import SimpleNamespace
 
 import pytest
 
+import config
 import subtitle_engine as subtitles
 
 
@@ -1066,6 +1067,8 @@ def test_generate_all_creates_three_selectable_sidecars(monkeypatch, tmp_path):
     video = tmp_path / 'movie.mp4'
     video.write_bytes(b'video')
     stages = []
+    monkeypatch.setattr(
+        config, 'get_recognition_quality', lambda: 'quality')
 
     monkeypatch.setattr(
         subtitles, '_prepare_runtime',
@@ -1123,6 +1126,8 @@ def test_chinese_failure_does_not_leave_unrequested_japanese(
         monkeypatch, tmp_path):
     video = tmp_path / 'movie.mp4'
     video.write_bytes(b'video')
+    monkeypatch.setattr(
+        config, 'get_recognition_quality', lambda: 'quality')
     monkeypatch.setattr(
         subtitles, '_prepare_runtime',
         lambda _cb, _cancel: ('whisper.exe', 'model.bin', 'vad.bin'))

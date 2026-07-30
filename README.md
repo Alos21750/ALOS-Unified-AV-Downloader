@@ -96,8 +96,9 @@ SmallTool 可設為每 1–168 小時自動檢查，或每天依這台電腦的�
 ## AI 字幕：下載完成，自動補上日／英／繁中 SRT
 
 - 兩個 Windows GUI 都可在下載前選擇 **不產生／日文／英文／繁中／三語**。影片完成後只會在旁邊建立所選的 `.ja.srt`、`.en.srt`、`.zh-TW.srt`，不修改原始 MP4。若只要求英文或繁中而翻譯失敗，不會留下未要求的日文 sidecar。字幕翻譯預設使用不需 API Key 的本地模式。
-- 日文辨識使用固定版本的官方 [whisper.cpp](https://github.com/ggml-org/whisper.cpp) 與[官方 Silero VAD](https://huggingface.co/ggml-org/whisper-vad/tree/main)，全程在本機執行。語音模型提供三個經 SHA-256 驗證、按實際選擇延遲下載的選項：預設 **精準 large-v3-turbo q5（約 574 MB）**、**平衡 small q5（約 190 MB）**、**快速 base q5（約 60 MB）**。
-- 外部 VAD 只作為語音閘門；辨識會使用保留原始靜音的、具上下文且互不重疊的視窗，再把結果映射回影片的絕對時間。解碼使用 beam search、best-of 與溫度 fallback，以兼顧辨識品質及穩定時間軸。
+- 日文辨識全程在本機執行。預設的 **自動（建議）** 使用固定 revision 的 [ReazonSpeech K2 v2](https://huggingface.co/reazon-research/reazonspeech-k2-v2) 與 [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx)，針對一般 CPU 最佳化，不需獨立顯示卡；經 SHA-256 驗證的辨識包約 **178 MB**，只在第一次實際要求字幕時下載。
+- 原有的 [whisper.cpp](https://github.com/ggml-org/whisper.cpp) 模式仍可明確選用：**精準 large-v3-turbo q5（約 574 MB）**、**平衡 small q5（約 190 MB）**、**快速 base q5（約 60 MB）**。自動模式只會在執行失敗、輸出損壞或時間軸結構無效時另行下載並改用平衡模式；不會因為猜測文字內容好壞而擅自切換。
+- [官方 Silero VAD](https://huggingface.co/ggml-org/whisper-vad/tree/main) 只作為語音閘門；辨識會使用保留原始靜音的、具上下文且互不重疊的視窗，再把結果映射回影片的絕對時間。ReazonSpeech 使用 CPU 高效率的 RNN-T 解碼；三個 Whisper 模式則使用 beam search、best-of 與溫度 fallback。
 - App 會記錄自己產生字幕所使用的辨識 profile 與 pipeline 來源；兩者變更時會重新產生由 App 建立的字幕及衍生翻譯。沒有來源記錄的既有 SRT，或產生後由使用者修改過的 SRT，會原樣保留。
 - 本地英文與台灣繁中翻譯使用固定版本、SHA-256 驗證的 [FuguMT](https://huggingface.co/staka/fugumt-ja-en) 與 [OPUS-MT](https://huggingface.co/Helsinki-NLP/opus-mt-en-zh) INT8 小模型，不使用 Google 或其他免費網路翻譯端點。本地翻譯模型包約 **147 MB**，只會在實際開始產生英文、繁中或三語字幕時下載；選擇「不產生」或「日文」不會下載，改用 LLM API 時也不需要這個本地翻譯模型包。下載一次後即可離線重複使用。
 - 可選的 API 擴充支援 **OpenAI、Anthropic、Gemini** 與 **OpenAI-compatible** API；後者可連接 DeepSeek、OpenRouter、Groq、Ollama、LiteLLM 等相容服務。影音內容中只有辨識後的字幕文字會送到所選服務；API 驗證與一般連線資訊也會正常送出，但影片與音訊始終留在本機。

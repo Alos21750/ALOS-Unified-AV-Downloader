@@ -2,6 +2,7 @@ from types import SimpleNamespace
 
 import pytest
 
+import config
 import llm_translation
 import subtitle_engine as subtitles
 from translation_settings import TranslationSettings
@@ -204,6 +205,8 @@ def test_generate_api_chinese_uses_japanese_not_existing_english(
 
 def test_none_and_japanese_modes_never_load_translation_provider_or_pack(
         monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        config, "get_recognition_quality", lambda: "quality")
     monkeypatch.setattr(
         subtitles,
         "_selected_translation_profile",

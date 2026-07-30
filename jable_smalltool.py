@@ -236,7 +236,7 @@ except Exception:
 
 # ── Constants ────────────────────────────────────────────────────────
 APP_NAME = 'Jable_smalltool'
-APP_VERSION = '2.5.38'
+APP_VERSION = '2.5.39'
 DEFAULT_WINDOW_WIDTH = 1180
 DEFAULT_WINDOW_HEIGHT = 780
 MIN_WINDOW_WIDTH = 760
@@ -1983,13 +1983,15 @@ class SmallToolApp(ctk.CTk):
             config.get_recognition_quality()
             if quality is None else str(quality or '').strip().lower())
         return {
+            'auto': T('recognition_quality_auto'),
             'quality': T('recognition_quality_quality'),
             'balanced': T('recognition_quality_balanced'),
             'fast': T('recognition_quality_fast'),
-        }.get(quality, T('recognition_quality_quality'))
+        }.get(quality, T('recognition_quality_auto'))
 
     def _recognition_quality_values(self) -> list[str]:
         return [
+            T('recognition_quality_auto'),
             T('recognition_quality_quality'),
             T('recognition_quality_balanced'),
             T('recognition_quality_fast'),
@@ -1997,10 +1999,11 @@ class SmallToolApp(ctk.CTk):
 
     def _recognition_quality_from_label(self, label: str) -> str:
         return {
+            T('recognition_quality_auto'): 'auto',
             T('recognition_quality_quality'): 'quality',
             T('recognition_quality_balanced'): 'balanced',
             T('recognition_quality_fast'): 'fast',
-        }.get(str(label or ''), 'quality')
+        }.get(str(label or ''), 'auto')
 
     def _open_translation_settings(self):
         open_translation_settings_dialog(

@@ -105,6 +105,7 @@ def test_state_label_translates_known_codes_and_keeps_unknown_codes():
 def test_recognition_quality_and_no_speech_copy_is_complete():
     required = {
         'recognition_quality_setting',
+        'recognition_quality_auto',
         'recognition_quality_quality',
         'recognition_quality_balanced',
         'recognition_quality_fast',
@@ -115,6 +116,8 @@ def test_recognition_quality_and_no_speech_copy_is_complete():
     for lang in LANGS:
         strings = locales.STRINGS[lang]
         assert required <= strings.keys()
+        assert 'ReazonSpeech' in strings['recognition_quality_desc']
+        assert '178' in strings['recognition_quality_desc']
         assert 'large-v3-turbo' in strings['recognition_quality_desc']
         assert '574' in strings['recognition_quality_desc']
         assert '190' in strings['recognition_quality_desc']

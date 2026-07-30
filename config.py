@@ -25,7 +25,7 @@ _system_proxy_cache = _PROXY_UNSET
 CF_OVERRIDES = {}
 VALID_RESOLUTION_PREFS = {'highest', 'lowest', '1080', '720', '480', '360'}
 VALID_SUBTITLE_PREFS = {'none', 'ja', 'en', 'zh', 'all'}
-VALID_RECOGNITION_QUALITIES = {'quality', 'balanced', 'fast'}
+VALID_RECOGNITION_QUALITIES = {'auto', 'quality', 'balanced', 'fast'}
 DEFAULT_DOWNLOAD_CONCURRENCY = 2
 MIN_DOWNLOAD_CONCURRENCY = 1
 MAX_DOWNLOAD_CONCURRENCY = 32
@@ -164,8 +164,11 @@ def set_subtitle_pref(pref):
 def _normalize_recognition_quality(value):
     quality = str(value or '').strip().lower().replace('_', '-')
     aliases = {
-        '': 'quality',
-        'default': 'quality',
+        '': 'auto',
+        'default': 'auto',
+        'automatic': 'auto',
+        'recommended': 'auto',
+        'cpu': 'auto',
         'precise': 'quality',
         'precision': 'quality',
         'accurate': 'quality',
@@ -185,7 +188,7 @@ def _normalize_recognition_quality(value):
     quality = aliases.get(quality, quality)
     if quality in VALID_RECOGNITION_QUALITIES:
         return quality
-    return 'quality'
+    return 'auto'
 
 
 def get_recognition_quality():

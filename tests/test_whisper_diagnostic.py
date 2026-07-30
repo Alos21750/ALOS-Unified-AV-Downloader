@@ -1,5 +1,6 @@
 import wave
 
+import config
 import subtitle_engine as subtitles
 
 
@@ -16,6 +17,8 @@ def test_whisper_diagnostic_records_timing_without_transcript_or_paths(
     media = tmp_path / 'private-title-secret.mp4'
     report = tmp_path / 'diagnostic.json'
     media.write_bytes(b'video')
+    monkeypatch.setattr(
+        config, 'get_recognition_quality', lambda: 'quality')
     profile = subtitles.recognition_profile()
     monkeypatch.setattr(
         subtitles, '_prepare_runtime',
@@ -25,7 +28,10 @@ def test_whisper_diagnostic_records_timing_without_transcript_or_paths(
     def fake_extract(_source, wav, _log, _cancel):
         _write_pcm16_wav(wav, 8.0)
 
-    def fake_whisper(_exe, _model, _vad, _wav, output, _log, _cancel):
+    def fake_whisper(
+            _exe, _model, _vad, _wav, output, _log, _cancel,
+            progress_callback=None):
+        del progress_callback
         path = output + '.srt'
         subtitles._atomic_write_text(
             path,
@@ -49,6 +55,10 @@ def test_whisper_diagnostic_records_timing_without_transcript_or_paths(
     assert payload['timing_monotonic'] is True
     assert payload['no_speech'] is False
     assert payload['audio_duration_ms'] == 8000
+    assert payload['actual_engine'] == 'whisper'
+    assert payload['actual_runtime_version'] == subtitles.WHISPER_VERSION
+    assert payload['actual_model_sha256'] == profile.model_sha256
+    assert payload['fallback_used'] is False
     assert 'PRIVATE TRANSCRIPT' not in serialized
     assert 'SECOND SECRET' not in serialized
     assert 'private-title-secret' not in serialized
@@ -60,6 +70,8 @@ def test_whisper_diagnostic_reports_vad_zero_as_no_speech(
     media = tmp_path / 'silence.wav'
     report = tmp_path / 'diagnostic.json'
     _write_pcm16_wav(media, 2.0)
+    monkeypatch.setattr(
+        config, 'get_recognition_quality', lambda: 'quality')
     profile = subtitles.recognition_profile()
     monkeypatch.setattr(
         subtitles, '_prepare_runtime',
@@ -70,7 +82,8 @@ def test_whisper_diagnostic_reports_vad_zero_as_no_speech(
         lambda _source, wav, _log, _cancel: _write_pcm16_wav(
             wav, 2.0))
     monkeypatch.setattr(
-        subtitles, '_run_whisper', lambda *_args: None)
+        subtitles, '_run_whisper',
+        lambda *_args, **_kwargs: None)
 
     payload = subtitles.run_whisper_diagnostic(
         str(media), str(report))
@@ -80,3 +93,6 @@ def test_whisper_diagnostic_reports_vad_zero_as_no_speech(
     assert payload['first_cue_start_ms'] is None
     assert payload['last_cue_end_ms'] is None
     assert payload['transcript_characters'] == 0
+    assert payload['actual_engine'] == 'vad'
+    assert payload['actual_model_sha256'] is None
+    assert payload['fallback_used'] is False

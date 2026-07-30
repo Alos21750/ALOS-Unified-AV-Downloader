@@ -119,13 +119,105 @@ class RecognitionProfile:
     model_name: str
     model_size: int
     model_sha256: str
+    engine: str = 'whisper'
 
     @property
     def model_url(self) -> str:
         return WHISPER_MODEL_URL_PREFIX + self.model_name
 
 
+REAZONSPEECH_PACK_VERSION = '1'
+REAZONSPEECH_PACK_NAME = (
+    f'Jable_reazonspeech_asr_v{REAZONSPEECH_PACK_VERSION}.zip')
+REAZONSPEECH_PACK_RELEASE_TAG = 'v2.5.39'
+REAZONSPEECH_PACK_URL = (
+    'https://github.com/Alos21750/JableTV-MissAV-Downloader-GUI-2026/'
+    f'releases/download/{REAZONSPEECH_PACK_RELEASE_TAG}/'
+    f'{REAZONSPEECH_PACK_NAME}'
+)
+REAZONSPEECH_PACK_SIZE = 186_185_998
+REAZONSPEECH_PACK_SHA256 = (
+    '64ed98f3779ba9aca5c271e4b03e4bed6ac74cfaadb3a8d69854dc4f234a729e'
+)
+REAZONSPEECH_MANIFEST_SHA256 = (
+    'f7e7c4675a4186786d8490e9881796e61ab611a953398605de88fd26a5082181'
+)
+REAZONSPEECH_MODEL_NAME = 'reazonspeech-k2-v2-hybrid-int8-fp32'
+# The immutable pack manifest is the canonical model/runtime identity. Keeping
+# a separate, unauditable "combined" digest here would create false assurance.
+REAZONSPEECH_MODEL_SHA256 = REAZONSPEECH_MANIFEST_SHA256
+REAZONSPEECH_MODEL_REVISION = (
+    '291488c8151be24d7da4bf7af26e533fad96e407')
+REAZONSPEECH_RUNTIME_VERSION = 'v1.13.4'
+REAZONSPEECH_RUNTIME_COMMIT = (
+    '142807252687d81b40d6315f23470a1512a00de3')
+REAZONSPEECH_REQUIRED_FILES = {
+    'licenses/Apache-2.0.txt': (
+        11_358,
+        'cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30',
+    ),
+    'licenses/ONNXRuntime-MIT.txt': (
+        1_073,
+        '2f07c72751aed99790b8a4869cf2311df85a860b22ded05fa22803587a48922c',
+    ),
+    'licenses/ONNXRuntime-ThirdPartyNotices.txt': (
+        325_054,
+        '0e07b95f3a8d6230037707c5c4a2b554d12c4cb67369669ac255635528ffcee2',
+    ),
+    'model/MODEL_CARD.md': (
+        1_274,
+        'fd5bd3fc21f308d363ecebaea5a09dba477796c43d72609761314d505a1c4577',
+    ),
+    'model/decoder-epoch-99-avg-1.onnx': (
+        11_767_836,
+        '58b18211ae06265466bfa17172dab574df94f76c8bcb61a3640c28ba860e4124',
+    ),
+    'model/encoder-epoch-99-avg-1.int8.onnx': (
+        154_670_139,
+        '2c7bd08a8a99f9ddd0d9e458456577b1f6279214e51426f114f9eced44c54e1d',
+    ),
+    'model/joiner-epoch-99-avg-1.int8.onnx': (
+        2_696_970,
+        '49cc7ea1d3d35a40a27442db5e89996da64bf0e683a903dce76e99e57a12e4de',
+    ),
+    'model/tokens.txt': (
+        45_754,
+        '2c3ac659818a48a0c04010e0593bbc4d7c8a24a054340b01131499c05fd52def',
+    ),
+    'runtime/onnxruntime.dll': (
+        14_438_400,
+        '7813cfb15cbcd05c567776a055806920924f2543cfbe1f38850e3bb1410e62bd',
+    ),
+    'runtime/onnxruntime_providers_shared.dll': (
+        104_960,
+        'cf52b931b9a76cde2290f654dbad81f037b5de19f75c0a34ec82ebdaf4a555d8',
+    ),
+    'runtime/sherpa-onnx-offline.exe': (
+        2_117_120,
+        '5ea3f02ee15e1af3fbf786568dd3f5ed85e67b302883e4cb763cf8ec2c93bb5a',
+    ),
+}
+REAZONSPEECH_BATCH_SIZE = 4
+REAZONSPEECH_MAX_BATCH_BYTES = 8 * 1024 * 1024
+REAZONSPEECH_PIPELINE_VERSION = (
+    'reazonspeech-k2-v2-sherpa-onnx-v1.13.4-context-batch-v1')
+REAZONSPEECH_MIN_TIMEOUT_SECONDS = 5 * 60
+REAZONSPEECH_STALL_TIMEOUT_SECONDS = 5 * 60
+REAZONSPEECH_MAX_TOKENS_PER_WINDOW = 4096
+REAZONSPEECH_MAX_TOKEN_CHARS = 128
+REAZONSPEECH_CUE_MAX_CHARS = 28
+REAZONSPEECH_CUE_MAX_SECONDS = 6.0
+REAZONSPEECH_CUE_PAUSE_SECONDS = 0.8
+REAZONSPEECH_CUE_PUNCTUATION = '。！？!?…'
+
 RECOGNITION_PROFILES = {
+    'auto': RecognitionProfile(
+        'auto',
+        REAZONSPEECH_MODEL_NAME,
+        REAZONSPEECH_PACK_SIZE,
+        REAZONSPEECH_MODEL_SHA256,
+        'reazonspeech',
+    ),
     'quality': RecognitionProfile(
         'quality',
         'ggml-large-v3-turbo-q5_0.bin',
@@ -224,10 +316,12 @@ _RECOGNITION_DEFAULT = object()
 ProgressCallback = Callable[[str, Optional[int]], None]
 CancelCheck = Callable[[], bool]
 TranslationProgressCallback = Callable[[int, int], None]
+RecognitionOutcomeCallback = Callable[[RecognitionProfile, bool], None]
 
 _runtime_lock = threading.Lock()
 _generation_lock = threading.Lock()
 _translation_runtime_lock = threading.Lock()
+_reazonspeech_runtime_lock = threading.Lock()
 _translation_memory_lock = threading.Lock()
 _translation_provider_state = threading.local()
 _recognition_profile_state = threading.local()
@@ -248,6 +342,10 @@ class SubtitleProcessTimeout(SubtitleError):
 
 class SubtitleStorageError(SubtitleError):
     """Raised before temporary ASR files can exhaust the destination disk."""
+
+
+class ReazonSpeechStructuralError(SubtitleError):
+    """A bounded ReazonSpeech failure eligible for the Whisper fallback."""
 
 
 @dataclass(frozen=True)
@@ -280,8 +378,11 @@ class RecognizedSegment:
 def normalize_recognition_quality(value) -> str:
     quality = str(value or '').strip().lower().replace('_', '-')
     aliases = {
-        '': 'quality',
-        'default': 'quality',
+        '': 'auto',
+        'default': 'auto',
+        'automatic': 'auto',
+        'recommended': 'auto',
+        'cpu': 'auto',
         'precise': 'quality',
         'precision': 'quality',
         'accurate': 'quality',
@@ -299,7 +400,52 @@ def normalize_recognition_quality(value) -> str:
         'legacy': 'fast',
     }
     quality = aliases.get(quality, quality)
-    return quality if quality in VALID_RECOGNITION_QUALITIES else 'quality'
+    return quality if quality in VALID_RECOGNITION_QUALITIES else 'auto'
+
+
+def _physical_cpu_count() -> int:
+    """Return the number of physical CPU cores without optional packages."""
+    fallback = max(1, int(os.cpu_count() or 4))
+    if sys.platform != 'win32':
+        return fallback
+    try:
+        import ctypes
+
+        relation_processor_core = 0
+        required = ctypes.c_ulong(0)
+        kernel32 = ctypes.windll.kernel32
+        kernel32.GetLogicalProcessorInformationEx(
+            relation_processor_core, None, ctypes.byref(required))
+        if required.value <= 0 or required.value > 16 * 1024 * 1024:
+            return fallback
+        buffer = (ctypes.c_ubyte * required.value)()
+        if not kernel32.GetLogicalProcessorInformationEx(
+                relation_processor_core, buffer, ctypes.byref(required)):
+            return fallback
+        offset = 0
+        cores = 0
+        while offset + 8 <= required.value:
+            relationship = int.from_bytes(
+                bytes(buffer[offset:offset + 4]), 'little')
+            size = int.from_bytes(
+                bytes(buffer[offset + 4:offset + 8]), 'little')
+            if size < 8 or offset + size > required.value:
+                return fallback
+            if relationship == relation_processor_core:
+                cores += 1
+            offset += size
+        return max(1, cores) if offset == required.value else fallback
+    except Exception:
+        return fallback
+
+
+def resolve_recognition_quality(value) -> str:
+    """Resolve a persisted selection to its pinned recognition profile."""
+    return normalize_recognition_quality(value)
+
+
+def _recognition_thread_count() -> int:
+    return max(1, min(8, _physical_cpu_count()))
 
 
 def recognition_profile(value=_RECOGNITION_DEFAULT) -> RecognitionProfile:
@@ -313,7 +459,7 @@ def recognition_profile(value=_RECOGNITION_DEFAULT) -> RecognitionProfile:
                 value = getter() if callable(getter) else None
             except Exception:
                 value = None
-    return RECOGNITION_PROFILES[normalize_recognition_quality(value)]
+    return RECOGNITION_PROFILES[resolve_recognition_quality(value)]
 
 
 @contextmanager
@@ -723,12 +869,450 @@ def _safe_extract_zip(
             'Subtitle component archive could not be extracted') from exc
 
 
+def _path_has_link_component(root: str, path: str) -> bool:
+    """Reject symlink/junction substitution inside a verified install."""
+    root = os.path.abspath(root)
+    path = os.path.abspath(path)
+
+    def is_link_or_reparse(candidate: str) -> bool:
+        try:
+            if os.path.islink(candidate):
+                return True
+            is_junction = getattr(os.path, 'isjunction', None)
+            if callable(is_junction) and is_junction(candidate):
+                return True
+            attributes = int(
+                getattr(os.lstat(candidate), 'st_file_attributes', 0))
+            # FILE_ATTRIBUTE_REPARSE_POINT. This also covers less-common
+            # Windows reparse types that are neither a symlink nor junction.
+            return bool(attributes & 0x400)
+        except FileNotFoundError:
+            return False
+        except OSError:
+            return True
+
+    try:
+        relative = os.path.relpath(path, root)
+    except ValueError:
+        return True
+    if relative == os.pardir or relative.startswith(os.pardir + os.sep):
+        return True
+    if is_link_or_reparse(root):
+        return True
+    if relative == '.':
+        return False
+    current = root
+    for part in relative.split(os.sep):
+        current = os.path.join(current, part)
+        if is_link_or_reparse(current):
+            return True
+    return False
+
+
+def _read_reazonspeech_manifest(
+        root: str, cancel_check: Optional[CancelCheck] = None) -> dict:
+    _check_cancel(cancel_check)
+    manifest_path = os.path.join(root, 'manifest.json')
+    if _path_has_link_component(root, manifest_path):
+        raise SubtitleError(
+            'ReazonSpeech model manifest path is unsafe')
+    try:
+        payload = _read_file_bounded(manifest_path, 64 * 1024)
+    except SubtitleError as exc:
+        raise SubtitleError(
+            'ReazonSpeech model manifest is missing') from exc
+    if hashlib.sha256(payload).hexdigest().lower() != (
+            REAZONSPEECH_MANIFEST_SHA256.lower()):
+        raise SubtitleError(
+            'ReazonSpeech model manifest failed integrity verification')
+
+    def reject_constant(_value):
+        raise ValueError('non-finite JSON number')
+
+    try:
+        manifest = json.loads(
+            payload.decode('utf-8'), parse_constant=reject_constant)
+    except (UnicodeError, ValueError, TypeError) as exc:
+        raise SubtitleError(
+            'ReazonSpeech model manifest is invalid') from exc
+    if (
+            not isinstance(manifest, dict)
+            or manifest.get('format')
+            != 'jable-reazonspeech-asr-pack'
+            or str(manifest.get('pack_version'))
+            != REAZONSPEECH_PACK_VERSION):
+        raise SubtitleError(
+            'ReazonSpeech model manifest is invalid')
+
+    model = manifest.get('model')
+    runtime = manifest.get('runtime')
+    if (
+            not isinstance(model, dict)
+            or model.get('path') != 'model'
+            or model.get('revision') != REAZONSPEECH_MODEL_REVISION
+            or not isinstance(runtime, dict)
+            or runtime.get('path') != 'runtime'
+            or runtime.get('version') != REAZONSPEECH_RUNTIME_VERSION):
+        raise SubtitleError(
+            'ReazonSpeech model manifest is incomplete')
+    # The official manifest also pins the sherpa-onnx source commit. Tiny
+    # test packs may omit it, but a conflicting value is never accepted.
+    if runtime.get('commit', REAZONSPEECH_RUNTIME_COMMIT) != (
+            REAZONSPEECH_RUNTIME_COMMIT):
+        raise SubtitleError(
+            'ReazonSpeech runtime manifest is invalid')
+
+    entries = manifest.get('files')
+    if (
+            not isinstance(entries, list)
+            or len(entries) != len(REAZONSPEECH_REQUIRED_FILES)):
+        raise SubtitleError(
+            'ReazonSpeech model manifest file list is invalid')
+    seen: set[str] = set()
+    for entry in entries:
+        _check_cancel(cancel_check)
+        if not isinstance(entry, dict):
+            raise SubtitleError(
+                'ReazonSpeech model manifest file list is invalid')
+        path = entry.get('path')
+        if not isinstance(path, str):
+            raise SubtitleError(
+                'ReazonSpeech model manifest file list is invalid')
+        normalized = path.replace('\\', '/')
+        expected = REAZONSPEECH_REQUIRED_FILES.get(normalized)
+        if expected is None or normalized in seen:
+            raise SubtitleError(
+                'ReazonSpeech model manifest contains an unreviewed file')
+        seen.add(normalized)
+        try:
+            size = entry['size']
+            sha256 = entry['sha256']
+        except KeyError as exc:
+            raise SubtitleError(
+                'ReazonSpeech model manifest file list is invalid') from exc
+        if (
+                isinstance(size, bool)
+                or not isinstance(size, int)
+                or not isinstance(sha256, str)
+                or (size, sha256.lower()) != expected):
+            raise SubtitleError(
+                'ReazonSpeech model manifest file metadata is invalid')
+    if seen != set(REAZONSPEECH_REQUIRED_FILES):
+        raise SubtitleError(
+            'ReazonSpeech model manifest is incomplete')
+    return manifest
+
+
+def _verify_reazonspeech_install(
+        root: str, require_marker: bool = True,
+        progress_callback: Optional[ProgressCallback] = None,
+        cancel_check: Optional[CancelCheck] = None,
+        progress_stage: Optional[str] = None,
+        progress_start: int = 0,
+        progress_end: int = 100) -> str:
+    _check_cancel(cancel_check)
+    root = os.path.abspath(root)
+    if not os.path.isdir(root) or _path_has_link_component(root, root):
+        raise SubtitleError(
+            'ReazonSpeech model install is missing')
+    required_files = set(REAZONSPEECH_REQUIRED_FILES)
+    required_files.add('manifest.json')
+    allowed_files = set(required_files)
+    allowed_files.add('.source-sha256')
+    allowed_directories = {
+        part
+        for relative in allowed_files
+        for part in (
+            '/'.join(relative.split('/')[:index])
+            for index in range(1, len(relative.split('/')))
+        )
+        if part
+    }
+    seen_files: set[str] = set()
+    try:
+        for current, directories, filenames in os.walk(
+                root, topdown=True, followlinks=False):
+            _check_cancel(cancel_check)
+            current_relative = os.path.relpath(current, root)
+            prefix = (
+                '' if current_relative == '.'
+                else current_relative.replace('\\', '/') + '/')
+            for directory in directories:
+                relative = prefix + directory
+                path = os.path.join(current, directory)
+                if (
+                        relative not in allowed_directories
+                        or _path_has_link_component(root, path)):
+                    raise SubtitleError(
+                        'ReazonSpeech model install contains '
+                        'an unreviewed path')
+            for filename in filenames:
+                relative = prefix + filename
+                path = os.path.join(current, filename)
+                if (
+                        relative not in allowed_files
+                        or relative in seen_files
+                        or _path_has_link_component(root, path)):
+                    raise SubtitleError(
+                        'ReazonSpeech model install contains '
+                        'an unreviewed file')
+                seen_files.add(relative)
+    except OSError as exc:
+        raise SubtitleError(
+            'ReazonSpeech model install could not be inspected') from exc
+    if (
+            not required_files.issubset(seen_files)
+            or (require_marker and '.source-sha256' not in seen_files)):
+        raise SubtitleError(
+            'ReazonSpeech model install is incomplete')
+    if require_marker:
+        marker = os.path.join(root, '.source-sha256')
+        if _path_has_link_component(root, marker):
+            raise SubtitleError(
+                'ReazonSpeech model marker is unsafe')
+        try:
+            with open(marker, 'r', encoding='ascii') as handle:
+                marker_value = handle.read(128).strip().lower()
+        except OSError as exc:
+            raise SubtitleError(
+                'ReazonSpeech model marker is missing') from exc
+        if marker_value != REAZONSPEECH_PACK_SHA256.lower():
+            raise SubtitleError(
+                'ReazonSpeech model marker is invalid')
+
+    _read_reazonspeech_manifest(root, cancel_check)
+    entries = sorted(REAZONSPEECH_REQUIRED_FILES.items())
+    if progress_stage:
+        _notify(progress_callback, progress_stage, progress_start)
+    for index, (relative, (expected_size, expected_sha256)) in enumerate(
+            entries):
+        _check_cancel(cancel_check)
+        path = _safe_manifest_path(root, relative)
+        if _path_has_link_component(root, path):
+            raise SubtitleError(
+                'ReazonSpeech model install contains an unsafe link')
+        # Always re-hash executable code. The metadata cache is safe for the
+        # immutable, very large ONNX weights but not for native DLL/EXE files.
+        if relative.casefold().endswith(('.exe', '.dll')):
+            _verified_paths.pop(os.path.abspath(path), None)
+        if not _is_verified(
+                path, expected_size, expected_sha256, cancel_check):
+            raise SubtitleError(
+                'ReazonSpeech model failed integrity verification')
+        if progress_stage and entries:
+            percent = progress_start + int(
+                (index + 1) * (progress_end - progress_start)
+                / len(entries))
+            _notify(
+                progress_callback, progress_stage,
+                min(progress_end, percent))
+    if progress_stage:
+        _notify(progress_callback, progress_stage, progress_end)
+    return root
+
+
+def _remove_reazonspeech_cache_path(path: str, parent: str) -> None:
+    path = os.path.abspath(path)
+    parent = os.path.abspath(parent)
+    if (
+            os.path.commonpath([parent, path]) != parent
+            or path == parent
+            or _path_has_link_component(parent, parent)
+            or _path_has_link_component(parent, path)):
+        raise SubtitleError('Unsafe ReazonSpeech cache path')
+    if os.path.isdir(path):
+        shutil.rmtree(path)
+    elif os.path.exists(path):
+        os.remove(path)
+
+
+def _remove_reazonspeech_cache_path_best_effort(
+        path: str, parent: str) -> None:
+    try:
+        _remove_reazonspeech_cache_path(path, parent)
+    except (OSError, SubtitleError):
+        pass
+
+
+def _cleanup_reazonspeech_install_dirs(parent: str) -> None:
+    parent = os.path.abspath(parent)
+    prefix = (
+        f'reazonspeech-v{REAZONSPEECH_PACK_VERSION}-install-')
+    try:
+        names = os.listdir(parent)
+    except OSError:
+        return
+    for name in names:
+        if not name.startswith(prefix):
+            continue
+        target = os.path.abspath(os.path.join(parent, name))
+        if (
+                os.path.commonpath([parent, target]) == parent
+                and target != parent
+                and os.path.isdir(target)
+                and not _path_has_link_component(parent, parent)
+                and not _path_has_link_component(parent, target)):
+            shutil.rmtree(target, ignore_errors=True)
+
+
+def _prepare_reazonspeech_runtime(
+        progress_callback: Optional[ProgressCallback],
+        cancel_check: Optional[CancelCheck]) -> str:
+    lock_name = (
+        f'reazonspeech-v{REAZONSPEECH_PACK_VERSION}')
+    with _interprocess_cache_lock(lock_name, cancel_check):
+        return _prepare_reazonspeech_runtime_locked(
+            progress_callback, cancel_check)
+
+
+def _prepare_reazonspeech_runtime_locked(
+        progress_callback: Optional[ProgressCallback],
+        cancel_check: Optional[CancelCheck]) -> str:
+    with _reazonspeech_runtime_lock:
+        _check_cancel(cancel_check)
+        root = _cache_root()
+        runtime_dir = os.path.join(
+            root, 'asr',
+            f'reazonspeech-v{REAZONSPEECH_PACK_VERSION}')
+        parent = os.path.dirname(runtime_dir)
+        os.makedirs(parent, exist_ok=True)
+        _cleanup_reazonspeech_install_dirs(parent)
+        previous = runtime_dir + '.previous'
+        if not os.path.exists(runtime_dir) and os.path.exists(previous):
+            os.replace(previous, runtime_dir)
+        try:
+            installed = _verify_reazonspeech_install(
+                runtime_dir, cancel_check=cancel_check)
+            if os.path.exists(previous):
+                _remove_reazonspeech_cache_path_best_effort(
+                    previous, parent)
+            return installed
+        except SubtitleCancelled:
+            raise
+        except SubtitleError:
+            pass
+
+        if os.path.exists(previous):
+            try:
+                _verify_reazonspeech_install(
+                    previous, cancel_check=cancel_check)
+            except SubtitleCancelled:
+                raise
+            except SubtitleError:
+                pass
+            else:
+                _remove_reazonspeech_cache_path(runtime_dir, parent)
+                os.replace(previous, runtime_dir)
+                return _verify_reazonspeech_install(
+                    runtime_dir, cancel_check=cancel_check)
+
+        if not REAZONSPEECH_PACK_SIZE or not REAZONSPEECH_PACK_SHA256:
+            raise SubtitleError(
+                'ReazonSpeech model pack is not configured')
+        _notify(progress_callback, 'model', 0)
+        archive = os.path.join(
+            root, 'downloads', REAZONSPEECH_PACK_NAME)
+
+        def download_progress(
+                _stage: str, percent: Optional[int]) -> None:
+            mapped = (
+                None if percent is None
+                else min(70, max(0, int(percent * 0.70))))
+            _notify(progress_callback, 'model', mapped)
+
+        _download_verified(
+            REAZONSPEECH_PACK_URL, archive,
+            REAZONSPEECH_PACK_SIZE, REAZONSPEECH_PACK_SHA256,
+            'model', download_progress, cancel_check)
+        # The verified archive remains on disk while its similarly sized
+        # contents are extracted. Reserve room for that second copy plus the
+        # normal processing safety margin before creating an install tree.
+        _ensure_asr_temp_space(parent, REAZONSPEECH_PACK_SIZE)
+        temp_dir = tempfile.mkdtemp(
+            prefix=(
+                f'reazonspeech-v{REAZONSPEECH_PACK_VERSION}-install-'),
+            dir=parent)
+        try:
+            _safe_extract_zip(
+                archive, temp_dir, progress_callback, cancel_check,
+                'model', 70, 85)
+            _verify_reazonspeech_install(
+                temp_dir, require_marker=False,
+                progress_callback=progress_callback,
+                cancel_check=cancel_check,
+                progress_stage='model',
+                progress_start=85,
+                progress_end=95)
+            _check_cancel(cancel_check)
+            marker = os.path.join(temp_dir, '.source-sha256')
+            with open(marker, 'w', encoding='ascii') as handle:
+                handle.write(REAZONSPEECH_PACK_SHA256)
+                handle.flush()
+                os.fsync(handle.fileno())
+            if os.path.exists(previous):
+                _remove_reazonspeech_cache_path_best_effort(
+                    previous, parent)
+            had_previous = os.path.exists(runtime_dir)
+            if had_previous:
+                os.replace(runtime_dir, previous)
+            try:
+                os.replace(temp_dir, runtime_dir)
+                temp_dir = ''
+            except Exception:
+                if had_previous and not os.path.exists(runtime_dir):
+                    os.replace(previous, runtime_dir)
+                raise
+            if os.path.exists(previous):
+                _remove_reazonspeech_cache_path(previous, parent)
+        finally:
+            if temp_dir:
+                shutil.rmtree(temp_dir, ignore_errors=True)
+
+        try:
+            os.remove(archive)
+        except FileNotFoundError:
+            pass
+        except OSError:
+            pass
+        installed = _verify_reazonspeech_install(
+            runtime_dir, cancel_check=cancel_check)
+        _notify(progress_callback, 'model', 100)
+        return installed
+
+
 def _prepare_runtime(progress_callback: Optional[ProgressCallback],
                      cancel_check: Optional[CancelCheck]) -> tuple[str, str, str]:
     with _interprocess_cache_lock(
             f'whisper-{WHISPER_VERSION}', cancel_check):
         return _prepare_runtime_locked(
             progress_callback, cancel_check)
+
+
+def _prepare_whisper_model(
+        profile: RecognitionProfile,
+        progress_callback: Optional[ProgressCallback],
+        cancel_check: Optional[CancelCheck]) -> str:
+    if profile.engine != 'whisper':
+        raise SubtitleError(
+            'Speech recognition fallback profile is invalid')
+    root = _cache_root()
+    model = os.path.join(root, 'models', profile.model_name)
+    _notify(progress_callback, 'model', 0)
+    return _download_verified(
+        profile.model_url, model, profile.model_size, profile.model_sha256,
+        'model', progress_callback, cancel_check)
+
+
+def _prepare_whisper_fallback_model(
+        progress_callback: Optional[ProgressCallback],
+        cancel_check: Optional[CancelCheck]) -> str:
+    """Download the balanced fallback only after Auto structurally fails."""
+    profile = RECOGNITION_PROFILES['balanced']
+    with _interprocess_cache_lock(
+            f'whisper-{WHISPER_VERSION}', cancel_check):
+        with _runtime_lock:
+            return _prepare_whisper_model(
+                profile, progress_callback, cancel_check)
 
 
 def _prepare_runtime_locked(
@@ -772,11 +1356,12 @@ def _prepare_runtime_locked(
             raise SubtitleError('Unable to install whisper.cpp')
 
         profile = recognition_profile()
-        model = os.path.join(root, 'models', profile.model_name)
-        _notify(progress_callback, 'model', 0)
-        _download_verified(
-            profile.model_url, model, profile.model_size, profile.model_sha256,
-            'model', progress_callback, cancel_check)
+        if profile.engine == 'reazonspeech':
+            model = _prepare_reazonspeech_runtime(
+                progress_callback, cancel_check)
+        else:
+            model = _prepare_whisper_model(
+                profile, progress_callback, cancel_check)
         vad_model = os.path.join(root, 'models', VAD_MODEL_NAME)
         _download_verified(
             VAD_MODEL_URL, vad_model, VAD_MODEL_SIZE, VAD_MODEL_SHA256,
@@ -1697,6 +2282,566 @@ def _run_whisper(exe: str, model: str, vad_model: str, wav_path: str,
         return result
     finally:
         shutil.rmtree(work_dir, ignore_errors=True)
+
+
+def _reazonspeech_timeout_seconds(
+        audio_duration: Optional[float]) -> float:
+    try:
+        duration = max(0.0, float(audio_duration or 0.0))
+    except (TypeError, ValueError, OverflowError):
+        duration = 0.0
+    return max(
+        float(REAZONSPEECH_MIN_TIMEOUT_SECONDS),
+        duration * 4.0 + 120.0)
+
+
+def _reazonspeech_cli_args(
+        pack_root: str, relative_wavs: Iterable[str]) -> list[str]:
+    relative_wavs = list(relative_wavs)
+    if (
+            not relative_wavs
+            or len(relative_wavs) > REAZONSPEECH_BATCH_SIZE):
+        raise SubtitleError(
+            'Speech recognition runtime received an invalid batch')
+    for relative_path in relative_wavs:
+        if (
+                not isinstance(relative_path, str)
+                or not re.fullmatch(r'island-\d{5}\.wav', relative_path)
+                or os.path.basename(relative_path) != relative_path):
+            raise SubtitleError(
+                'Speech recognition runtime received an unsafe input name')
+
+    pack_root = os.path.abspath(pack_root)
+    runtime = os.path.join(
+        pack_root, 'runtime', 'sherpa-onnx-offline.exe')
+    model_dir = os.path.join(pack_root, 'model')
+    return [
+        runtime,
+        '--tokens=' + os.path.join(model_dir, 'tokens.txt'),
+        '--encoder=' + os.path.join(
+            model_dir, 'encoder-epoch-99-avg-1.int8.onnx'),
+        '--decoder=' + os.path.join(
+            model_dir, 'decoder-epoch-99-avg-1.onnx'),
+        '--joiner=' + os.path.join(
+            model_dir, 'joiner-epoch-99-avg-1.int8.onnx'),
+        '--num-threads=' + str(_recognition_thread_count()),
+        '--decoding-method=greedy_search',
+        '--provider=cpu',
+        '--debug=false',
+        '--sample-rate=16000',
+        '--feat-dim=80',
+        '--dither=0',
+        *relative_wavs,
+    ]
+
+
+def _strict_reazonspeech_json_lines(
+        path: str, expected_count: int) -> list[dict]:
+    try:
+        payload = _read_file_bounded(
+            path, REAZONSPEECH_MAX_BATCH_BYTES)
+        text = payload.decode('utf-8', errors='strict')
+    except (SubtitleError, UnicodeError) as exc:
+        raise ReazonSpeechStructuralError(
+            'ReazonSpeech returned an invalid response') from exc
+    lines = text.splitlines()
+    if (
+            len(lines) != expected_count
+            or any(not line.strip() for line in lines)):
+        raise ReazonSpeechStructuralError(
+            'ReazonSpeech returned the wrong result count')
+
+    def reject_constant(_value):
+        raise ValueError('non-finite JSON number')
+
+    def reject_duplicate_keys(pairs):
+        result = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError('duplicate JSON key')
+            result[key] = value
+        return result
+
+    results: list[dict] = []
+    for line in lines:
+        try:
+            root = json.loads(
+                line,
+                parse_constant=reject_constant,
+                object_pairs_hook=reject_duplicate_keys)
+        except (ValueError, TypeError) as exc:
+            raise ReazonSpeechStructuralError(
+                'ReazonSpeech returned an invalid response') from exc
+        if not isinstance(root, dict):
+            raise ReazonSpeechStructuralError(
+                'ReazonSpeech returned an invalid response')
+        results.append(root)
+    return results
+
+
+def _run_reazonspeech_cli_batch(
+        pack_root: str, work_dir: str,
+        relative_wavs: list[str], batch_index: int,
+        cancel_check: Optional[CancelCheck],
+        *,
+        completed_offset: int = 0,
+        total_windows: Optional[int] = None,
+        batch_audio_seconds: Optional[float] = None,
+        progress_callback: Optional[ProgressCallback] = None,
+) -> list[dict]:
+    args = _reazonspeech_cli_args(pack_root, relative_wavs)
+    stdout_path = os.path.join(
+        work_dir, f'reazon-batch-{batch_index:05d}.stdout.jsonl')
+    stderr_path = os.path.join(
+        work_dir, f'reazon-batch-{batch_index:05d}.stderr.log')
+    creationflags = (
+        getattr(subprocess, 'CREATE_NO_WINDOW', 0)
+        if os.name == 'nt' else 0)
+    process = None
+    total = max(
+        len(relative_wavs),
+        int(total_windows or len(relative_wavs)))
+
+    def _progress_probe():
+        sizes = []
+        for path in (stdout_path, stderr_path):
+            try:
+                sizes.append(os.path.getsize(path))
+            except OSError:
+                sizes.append(-1)
+        return tuple(sizes)
+
+    def _report_progress():
+        absolute = min(
+            total, max(0, int(completed_offset)))
+        _notify(
+            progress_callback, 'transcribe_ja',
+            min(99, int(absolute * 100 / total)))
+
+    try:
+        _ensure_asr_temp_space(work_dir)
+        with (
+                open(stdout_path, 'wb') as stdout_handle,
+                open(stderr_path, 'wb') as stderr_handle):
+            try:
+                process = subprocess.Popen(
+                    args,
+                    stdin=subprocess.DEVNULL,
+                    stdout=stdout_handle,
+                    stderr=stderr_handle,
+                    cwd=work_dir,
+                    creationflags=creationflags,
+                )
+            except (OSError, ValueError) as exc:
+                raise ReazonSpeechStructuralError(
+                    'ReazonSpeech process could not start') from exc
+            try:
+                _wait_for_process(
+                    process,
+                    cancel_check,
+                    timeout_seconds=_reazonspeech_timeout_seconds(
+                        batch_audio_seconds),
+                    stall_timeout_seconds=(
+                        REAZONSPEECH_STALL_TIMEOUT_SECONDS),
+                    progress_probe=_progress_probe,
+                    heartbeat_callback=_report_progress,
+                    disk_guard_path=work_dir,
+                )
+            except SubtitleCancelled:
+                raise
+            except SubtitleStorageError:
+                raise
+            except SubtitleProcessTimeout as exc:
+                raise ReazonSpeechStructuralError(
+                    'ReazonSpeech process stopped responding') from exc
+            except SubtitleError as exc:
+                raise ReazonSpeechStructuralError(
+                    'ReazonSpeech process stopped responding') from exc
+        if process.returncode != 0:
+            raise ReazonSpeechStructuralError(
+                'ReazonSpeech process failed')
+        payloads = _strict_reazonspeech_json_lines(
+            stdout_path, len(relative_wavs))
+        completed = min(
+            total,
+            max(0, int(completed_offset)) + len(relative_wavs))
+        _notify(
+            progress_callback, 'transcribe_ja',
+            min(99, int(completed * 100 / total)))
+        return payloads
+    except SubtitleCancelled:
+        raise
+    except SubtitleStorageError:
+        # Storage pressure is shared by both engines and a fallback would make
+        # it worse, so it must remain a hard failure.
+        raise
+    except ReazonSpeechStructuralError:
+        raise
+    except OSError as exc:
+        raise ReazonSpeechStructuralError(
+            'ReazonSpeech process failed') from exc
+    finally:
+        if process is not None and process.poll() is None:
+            _terminate_process(process)
+
+
+def _valid_reazonspeech_string(value, maximum: int) -> bool:
+    return (
+        isinstance(value, str)
+        and len(value) <= maximum
+        and '\x00' not in value
+        and not any(
+            unicodedata.category(character) in ('Cc', 'Cf', 'Cs')
+            for character in value)
+    )
+
+
+def _parse_reazonspeech_payload(
+        root: dict, window: SpeechIsland,
+        window_duration: float) -> list[RecognizedSegment]:
+    expected_keys = {
+        'lang', 'emotion', 'event', 'text', 'timestamps', 'durations',
+        'tokens', 'ys_log_probs', 'words',
+    }
+    if (
+            not isinstance(root, dict)
+            or set(root) != expected_keys
+            or not math.isfinite(window_duration)
+            or window_duration <= 0.0
+            or not _valid_reazonspeech_string(root.get('lang'), 64)
+            or root.get('lang') not in ('', 'ja')
+            or not _valid_reazonspeech_string(root.get('emotion'), 256)
+            or not _valid_reazonspeech_string(root.get('event'), 256)
+            or not _valid_reazonspeech_string(
+                root.get('text'), MAX_WHISPER_TEXT_CHARS)):
+        raise ReazonSpeechStructuralError(
+            'ReazonSpeech returned an invalid response')
+
+    text = root['text']
+    if text != text.strip():
+        raise ReazonSpeechStructuralError(
+            'ReazonSpeech returned an invalid response')
+    tokens = root.get('tokens')
+    timestamps = root.get('timestamps')
+    log_probs = root.get('ys_log_probs')
+    durations = root.get('durations')
+    words = root.get('words')
+    if (
+            not isinstance(tokens, list)
+            or not isinstance(timestamps, list)
+            or not isinstance(log_probs, list)
+            or not isinstance(durations, list)
+            or not isinstance(words, list)
+            or len(tokens) > REAZONSPEECH_MAX_TOKENS_PER_WINDOW
+            or len(timestamps) != len(tokens)
+            or len(log_probs) != len(tokens)
+            or len(durations) not in (0, len(tokens))
+            or len(words) > REAZONSPEECH_MAX_TOKENS_PER_WINDOW):
+        raise ReazonSpeechStructuralError(
+            'ReazonSpeech returned an invalid response')
+
+    if any(
+            not _valid_reazonspeech_string(word, REAZONSPEECH_MAX_TOKEN_CHARS)
+            for word in words):
+        raise ReazonSpeechStructuralError(
+            'ReazonSpeech returned an invalid response')
+    if any(
+            not _valid_reazonspeech_string(
+                token, REAZONSPEECH_MAX_TOKEN_CHARS)
+            or not token
+            for token in tokens):
+        raise ReazonSpeechStructuralError(
+            'ReazonSpeech returned an invalid response')
+    if ''.join(tokens) != text:
+        raise ReazonSpeechStructuralError(
+            'ReazonSpeech token text did not match its transcript')
+    if not text:
+        if timestamps or log_probs or durations:
+            raise ReazonSpeechStructuralError(
+                'ReazonSpeech returned an invalid response')
+        return []
+
+    checked_timestamps: list[float] = []
+    previous = -1.0
+    for value in timestamps:
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ReazonSpeechStructuralError(
+                'ReazonSpeech returned invalid timing')
+        current = float(value)
+        if (
+                not math.isfinite(current)
+                or current < 0.0
+                or current < previous
+                or current > window_duration + 0.5):
+            raise ReazonSpeechStructuralError(
+                'ReazonSpeech returned invalid timing')
+        checked_timestamps.append(current)
+        previous = current
+    if any(
+            isinstance(value, bool)
+            or not isinstance(value, (int, float))
+            or not math.isfinite(float(value))
+            for value in log_probs):
+        raise ReazonSpeechStructuralError(
+            'ReazonSpeech returned invalid token scores')
+    if any(
+            isinstance(value, bool)
+            or not isinstance(value, (int, float))
+            or not math.isfinite(float(value))
+            or float(value) < 0.0
+            or float(value) > window_duration + 0.5
+            for value in durations):
+        raise ReazonSpeechStructuralError(
+            'ReazonSpeech returned invalid token durations')
+
+    recognized: list[RecognizedSegment] = []
+    group_start = 0
+    group_chars = 0
+    punctuation = frozenset(REAZONSPEECH_CUE_PUNCTUATION)
+    for index, token in enumerate(tokens):
+        group_chars += len(token)
+        final = index == len(tokens) - 1
+        next_start = (
+            window_duration if final
+            else checked_timestamps[index + 1])
+        group_time = next_start - checked_timestamps[group_start]
+        pause = (
+            not final
+            and checked_timestamps[index + 1]
+            - checked_timestamps[index]
+            >= REAZONSPEECH_CUE_PAUSE_SECONDS)
+        should_break = (
+            final
+            or token[-1] in punctuation
+            or pause
+            or group_chars >= REAZONSPEECH_CUE_MAX_CHARS
+            or group_time >= REAZONSPEECH_CUE_MAX_SECONDS)
+        if (
+                should_break
+                and not final
+                and next_start
+                <= checked_timestamps[group_start] + 0.001):
+            should_break = False
+        if not should_break:
+            continue
+
+        local_start = checked_timestamps[group_start]
+        if final:
+            local_end = min(
+                window_duration,
+                max(
+                    checked_timestamps[index] + 0.5,
+                    local_start + 0.04))
+        else:
+            local_end = min(window_duration, next_start)
+        if (
+                local_start < 0.0
+                or local_end <= local_start
+                or local_end > window_duration + 1e-6):
+            raise ReazonSpeechStructuralError(
+                'ReazonSpeech returned invalid timing')
+        cue_text = ''.join(tokens[group_start:index + 1])
+        absolute_start = min(
+            window.end, window.start + local_start)
+        absolute_end = min(
+            window.end, window.start + local_end)
+        if (
+                absolute_start < window.start - 1e-6
+                or absolute_end > window.end + 1e-6
+                or absolute_end <= absolute_start):
+            raise ReazonSpeechStructuralError(
+                'ReazonSpeech returned invalid timing')
+        recognized.append(
+            RecognizedSegment(
+                absolute_start, absolute_end, cue_text))
+        group_start = index + 1
+        group_chars = 0
+
+    if (
+            group_start != len(tokens)
+            or ''.join(cue.text for cue in recognized) != text):
+        raise ReazonSpeechStructuralError(
+            'ReazonSpeech cue grouping changed the transcript')
+    return recognized
+
+
+def _run_reazonspeech(
+        whisper_exe: str, pack_root: str, vad_model: str,
+        wav_path: str, output_base: str, log_path: str,
+        cancel_check: Optional[CancelCheck],
+        progress_callback: Optional[ProgressCallback] = None,
+        outcome_callback: Optional[RecognitionOutcomeCallback] = None,
+) -> Optional[str]:
+    del log_path
+    runtime_dir = os.path.dirname(os.path.abspath(whisper_exe))
+    vad_exe = os.path.join(
+        runtime_dir, 'whisper-vad-speech-segments.exe')
+    if (
+            not os.path.isfile(whisper_exe)
+            or not os.path.isfile(vad_exe)):
+        raise _asr_failure('runtime')
+    _verify_reazonspeech_install(
+        pack_root, cancel_check=cancel_check)
+
+    try:
+        work_dir = tempfile.mkdtemp(prefix='jable-reazonspeech-')
+    except OSError as exc:
+        raise _asr_failure('runtime') from exc
+    try:
+        total_frames, audio_duration = _validate_pcm16_wav(wav_path)
+        islands = _run_external_vad(
+            vad_exe, vad_model, wav_path, work_dir, cancel_check,
+            audio_duration=audio_duration,
+            progress_callback=progress_callback)
+        clamped: list[SpeechIsland] = []
+        for island in islands:
+            if island.start > audio_duration + 0.5:
+                raise SubtitleError(
+                    'Speech detection returned invalid timing')
+            start = min(max(0.0, island.start), audio_duration)
+            end = min(max(0.0, island.end), audio_duration)
+            if end <= start:
+                raise SubtitleError(
+                    'Speech detection returned invalid timing')
+            clamped.append(SpeechIsland(start, end))
+        islands = _merge_speech_islands(clamped)
+        if not islands:
+            return None
+        windows = _build_recognition_windows(islands, audio_duration)
+        _notify(progress_callback, 'transcribe_ja', 0)
+        slice_bytes = sum(
+            (
+                max(
+                    0,
+                    min(
+                        total_frames,
+                        int(round(window.end * WHISPER_SAMPLE_RATE)),
+                    )
+                    - max(
+                        0,
+                        min(
+                            total_frames,
+                            int(round(
+                                window.start * WHISPER_SAMPLE_RATE)),
+                        ),
+                    ),
+                )
+                * 2
+                + 44
+            )
+            for window in windows
+        )
+        _ensure_asr_temp_space(work_dir, slice_bytes)
+
+        relative_wavs: list[str] = []
+        window_durations: list[float] = []
+        for index, window in enumerate(windows):
+            _check_cancel(cancel_check)
+            relative_path = f'island-{index:05d}.wav'
+            relative_wavs.append(relative_path)
+            window_durations.append(_slice_pcm16_wav(
+                wav_path,
+                os.path.join(work_dir, relative_path),
+                window,
+                total_frames,
+            ))
+
+        try:
+            recognized: list[RecognizedSegment] = []
+            for batch_index, batch_start in enumerate(
+                    range(
+                        0, len(relative_wavs),
+                        REAZONSPEECH_BATCH_SIZE)):
+                _check_cancel(cancel_check)
+                batch_end = min(
+                    batch_start + REAZONSPEECH_BATCH_SIZE,
+                    len(relative_wavs))
+                batch_names = relative_wavs[batch_start:batch_end]
+                payloads = _run_reazonspeech_cli_batch(
+                    pack_root, work_dir, batch_names,
+                    batch_index, cancel_check,
+                    completed_offset=batch_start,
+                    total_windows=len(relative_wavs),
+                    batch_audio_seconds=sum(
+                        window_durations[batch_start:batch_end]),
+                    progress_callback=progress_callback)
+                if len(payloads) != len(batch_names):
+                    raise ReazonSpeechStructuralError(
+                        'ReazonSpeech returned the wrong result count')
+                for offset, payload in enumerate(payloads):
+                    window_index = batch_start + offset
+                    cues = _parse_reazonspeech_payload(
+                        payload,
+                        windows[window_index],
+                        window_durations[window_index],
+                    )
+                    if not cues:
+                        raise ReazonSpeechStructuralError(
+                            'Speech was detected but ReazonSpeech returned '
+                            'an empty window')
+                    if len(recognized) + len(cues) > MAX_WHISPER_CUES:
+                        raise ReazonSpeechStructuralError(
+                            'ReazonSpeech returned too many segments')
+                    recognized.extend(cues)
+            if not recognized:
+                raise ReazonSpeechStructuralError(
+                    'Speech was detected but no valid subtitle cues '
+                    'were produced')
+        except ReazonSpeechStructuralError:
+            fallback_model = _prepare_whisper_fallback_model(
+                progress_callback, cancel_check)
+            result = _run_whisper(
+                whisper_exe, fallback_model, vad_model,
+                wav_path, output_base, '', cancel_check,
+                progress_callback=progress_callback)
+            if outcome_callback:
+                outcome_callback(RECOGNITION_PROFILES['balanced'], True)
+            return result
+
+        srt_cues = [
+            SrtCue(
+                str(index),
+                (
+                    f'{_format_srt_timestamp(cue.start)} --> '
+                    f'{_format_srt_timestamp(cue.end)}'),
+                cue.text,
+            )
+            for index, cue in enumerate(recognized, start=1)
+        ]
+        result = output_base + '.srt'
+        try:
+            _atomic_write_text(result, render_srt(srt_cues))
+        except OSError as exc:
+            raise _asr_failure('runtime') from exc
+        _notify(progress_callback, 'transcribe_ja', 100)
+        if outcome_callback:
+            outcome_callback(RECOGNITION_PROFILES['auto'], False)
+        return result
+    finally:
+        shutil.rmtree(work_dir, ignore_errors=True)
+
+
+def _run_recognition(
+        profile: RecognitionProfile,
+        exe: str, model: str, vad_model: str, wav_path: str,
+        output_base: str, log_path: str,
+        cancel_check: Optional[CancelCheck],
+        progress_callback: Optional[ProgressCallback] = None,
+        outcome_callback: Optional[RecognitionOutcomeCallback] = None,
+) -> Optional[str]:
+    if profile.engine == 'reazonspeech':
+        return _run_reazonspeech(
+            exe, model, vad_model, wav_path, output_base,
+            log_path, cancel_check,
+            progress_callback=progress_callback,
+            outcome_callback=outcome_callback)
+    result = _run_whisper(
+        exe, model, vad_model, wav_path, output_base,
+        log_path, cancel_check,
+        progress_callback=progress_callback)
+    if outcome_callback and result is not None:
+        outcome_callback(profile, False)
+    return result
 
 
 def _atomic_copy(source: str, destination: str) -> None:
@@ -2979,21 +4124,34 @@ def run_whisper_diagnostic(
     started = time.perf_counter()
     with _recognition_profile_scope(profile):
         exe, model, vad_model = _prepare_runtime(None, None)
-    if os.path.basename(model) != profile.model_name:
+    if (
+            profile.engine == 'whisper'
+            and os.path.basename(model) != profile.model_name):
         raise SubtitleError(
             'Speech recognition diagnostic model selection changed')
 
     cues: list[SrtCue] = []
     audio_duration = 0.0
+    execution: dict[str, object] = {}
+
+    def record_execution(
+            actual_profile: RecognitionProfile,
+            fallback_used: bool) -> None:
+        execution.update({
+            'profile': actual_profile,
+            'fallback_used': bool(fallback_used),
+        })
+
     with tempfile.TemporaryDirectory(
             prefix='jable-whisper-diagnostic-') as temp_dir:
         wav = os.path.join(temp_dir, 'audio.wav')
         log = os.path.join(temp_dir, 'audio.log')
         _extract_audio(source, wav, log, None)
         _frames, audio_duration = _validate_pcm16_wav(wav)
-        result = _run_whisper(
-            exe, model, vad_model, wav,
-            os.path.join(temp_dir, 'diagnostic'), log, None)
+        result = _run_recognition(
+            profile, exe, model, vad_model, wav,
+            os.path.join(temp_dir, 'diagnostic'), log, None,
+            outcome_callback=record_execution)
         if result:
             try:
                 cues = parse_srt(_read_srt_text(result))
@@ -3021,13 +4179,36 @@ def run_whisper_diagnostic(
     timing_bytes = json.dumps(
         timing_pairs, separators=(',', ':')).encode('ascii')
     wall_seconds = max(0.0, time.perf_counter() - started)
+    actual_profile = execution.get('profile')
+    if isinstance(actual_profile, RecognitionProfile):
+        actual_engine = actual_profile.engine
+        actual_runtime_version = (
+            REAZONSPEECH_RUNTIME_VERSION
+            if actual_engine == 'reazonspeech'
+            else WHISPER_VERSION)
+        actual_model_sha256 = actual_profile.model_sha256
+        fallback_used = bool(execution.get('fallback_used'))
+    else:
+        # Auto can legitimately stop at the shared VAD gate when no speech is
+        # present. In that case no ASR model or fallback was executed.
+        actual_engine = 'vad'
+        actual_runtime_version = WHISPER_VERSION
+        actual_model_sha256 = None
+        fallback_used = False
     payload = {
         'schema': 1,
         'kind': 'jable_whisper_diagnostic',
         'frozen': bool(getattr(sys, 'frozen', False)),
-        'runtime_version': WHISPER_VERSION,
+        'runtime_version': (
+            REAZONSPEECH_RUNTIME_VERSION
+            if profile.engine == 'reazonspeech'
+            else WHISPER_VERSION),
         'profile': profile.key,
         'model_sha256': profile.model_sha256,
+        'actual_engine': actual_engine,
+        'actual_runtime_version': actual_runtime_version,
+        'actual_model_sha256': actual_model_sha256,
+        'fallback_used': fallback_used,
         'asr_signature': _asr_signature(profile),
         'audio_duration_ms': int(round(audio_duration * 1000.0)),
         'cue_count': len(cues),
@@ -3333,6 +4514,71 @@ def _asr_signature(profile: RecognitionProfile) -> str:
     cli_sha256 = WHISPER_RUNTIME_FILES['Release/whisper-cli.exe'][1]
     vad_helper_sha256 = WHISPER_RUNTIME_FILES[
         'Release/whisper-vad-speech-segments.exe'][1]
+    if profile.engine == 'reazonspeech':
+        fallback = RECOGNITION_PROFILES['balanced']
+        return _stable_signature({
+            'pipeline': REAZONSPEECH_PIPELINE_VERSION,
+            'runtime': {
+                'version': REAZONSPEECH_RUNTIME_VERSION,
+                'commit': REAZONSPEECH_RUNTIME_COMMIT,
+                'pack_version': REAZONSPEECH_PACK_VERSION,
+                'pack_sha256': REAZONSPEECH_PACK_SHA256,
+                'manifest_sha256': REAZONSPEECH_MANIFEST_SHA256,
+                'executable_sha256': REAZONSPEECH_REQUIRED_FILES[
+                    'runtime/sherpa-onnx-offline.exe'][1],
+                'onnxruntime_sha256': REAZONSPEECH_REQUIRED_FILES[
+                    'runtime/onnxruntime.dll'][1],
+            },
+            'model': {
+                'key': profile.key,
+                'name': profile.model_name,
+                'revision': REAZONSPEECH_MODEL_REVISION,
+                'size': profile.model_size,
+                'sha256': profile.model_sha256,
+            },
+            'vad': {
+                'runtime_version': WHISPER_VERSION,
+                'runtime_archive_sha256': WHISPER_ARCHIVE_SHA256,
+                'helper_sha256': vad_helper_sha256,
+                'model_sha256': VAD_MODEL_SHA256,
+                'threshold': VAD_THRESHOLD,
+                'minimum_speech_ms': VAD_MIN_SPEECH_MS,
+                'maximum_speech_seconds': VAD_MAX_SPEECH_SECONDS,
+                'speech_padding_ms': VAD_SPEECH_PAD_MS,
+                'sample_overlap_seconds': VAD_SAMPLES_OVERLAP_SECONDS,
+                'merge_gap_seconds': VAD_MERGE_GAP_SECONDS,
+            },
+            'windows': {
+                'speech_span_seconds':
+                    RECOGNITION_WINDOW_SPEECH_SPAN_SECONDS,
+                'padding_seconds':
+                    RECOGNITION_WINDOW_PADDING_SECONDS,
+                'maximum_seconds': RECOGNITION_WINDOW_MAX_SECONDS,
+            },
+            'decoder': {
+                'language': 'ja',
+                'method': 'greedy_search',
+                'provider': 'cpu',
+                'sample_rate': WHISPER_SAMPLE_RATE,
+                'feature_dimension': 80,
+                'dither': 0,
+                'batch_size': REAZONSPEECH_BATCH_SIZE,
+            },
+            'cue_grouping': {
+                'maximum_characters': REAZONSPEECH_CUE_MAX_CHARS,
+                'maximum_seconds': REAZONSPEECH_CUE_MAX_SECONDS,
+                'pause_seconds': REAZONSPEECH_CUE_PAUSE_SECONDS,
+                'punctuation': REAZONSPEECH_CUE_PUNCTUATION,
+            },
+            'structural_fallback': {
+                'pipeline': ASR_PIPELINE_VERSION,
+                'key': fallback.key,
+                'name': fallback.model_name,
+                'size': fallback.model_size,
+                'sha256': fallback.model_sha256,
+                'cli_sha256': cli_sha256,
+            },
+        })
     return _stable_signature({
         'pipeline': ASR_PIPELINE_VERSION,
         'runtime': {
@@ -3772,8 +5018,8 @@ def generate_subtitles(video_path: str, mode,
                 ja_expected_identity if existing_japanese else None)
             if need_japanese_source and not japanese_source:
                 _notify(progress_callback, 'transcribe_ja', None)
-                japanese_source = _run_whisper(
-                    exe, model, vad_model, wav,
+                japanese_source = _run_recognition(
+                    profile, exe, model, vad_model, wav,
                     os.path.join(temp_dir, 'japanese'), log, cancel_check,
                     progress_callback=progress_callback)
                 if not japanese_source:

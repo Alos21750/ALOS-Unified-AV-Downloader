@@ -51,7 +51,7 @@ from ui_theme import (
     browse_columns_for_width,
 )
 
-APP_VERSION = '2.5.38'
+APP_VERSION = '2.5.39'
 
 # issue #24: startup breadcrumbs — no-op if crashlog unavailable
 try:
@@ -1258,6 +1258,7 @@ class ModernApp(ctk.CTk):
 
     def _recognition_quality_values(self):
         return [
+            T('recognition_quality_auto'),
             T('recognition_quality_quality'),
             T('recognition_quality_balanced'),
             T('recognition_quality_fast'),
@@ -1265,16 +1266,18 @@ class ModernApp(ctk.CTk):
 
     def _recognition_quality_from_label(self, label):
         return normalize_recognition_quality({
+            T('recognition_quality_auto'): 'auto',
             T('recognition_quality_quality'): 'quality',
             T('recognition_quality_balanced'): 'balanced',
             T('recognition_quality_fast'): 'fast',
-        }.get(str(label or ''), 'quality'))
+        }.get(str(label or ''), 'auto'))
 
     def _recognition_quality_label(self, quality=None):
         quality = (
             config.get_recognition_quality()
             if quality is None else quality)
         return {
+            'auto': T('recognition_quality_auto'),
             'quality': T('recognition_quality_quality'),
             'balanced': T('recognition_quality_balanced'),
             'fast': T('recognition_quality_fast'),
