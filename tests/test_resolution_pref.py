@@ -221,3 +221,25 @@ def test_download_concurrency_round_trip_clamps_and_preserves_preferences(
         json.dumps({'download_concurrency': 'not-a-number'}),
         encoding='utf-8')
     assert config.get_download_concurrency() == 2
+
+
+def test_max_workers_per_video_round_trip_clamps_and_preserves_preferences(
+        tmp_path, monkeypatch):
+    path = tmp_path / 'ui_prefs.json'
+    monkeypatch.setattr(config, '_ui_prefs_path', lambda: str(path))
+
+    config.set_theme('dark')
+    assert config.get_max_workers_per_video() == config.DEFAULT_MAX_WORKERS_PER_VIDEO
+    assert config.set_max_workers_per_video('3') == 3
+    assert config.get_max_workers_per_video() == 3
+    assert config.set_max_workers_per_video(0) == 1
+    assert config.set_max_workers_per_video(999) == 16
+
+    stored = json.loads(path.read_text(encoding='utf-8'))
+    assert stored['theme'] == 'dark'
+    assert stored['max_workers_per_video'] == 16
+
+    path.write_text(
+        json.dumps({'max_workers_per_video': 'not-a-number'}),
+        encoding='utf-8')
+    assert config.get_max_workers_per_video() == config.DEFAULT_MAX_WORKERS_PER_VIDEO

@@ -59,12 +59,13 @@ SmartScreen 信譽提醒與 Defender Antivirus 隔離是不同事件。請先閱
 1. 在「瀏覽」選 JableTV、MissAV 或 SupJav，再選分類或輸入關鍵字。
 2. 勾選多部影片後加入佇列，或直接下載選取項目。
 3. 也可在「下載」貼上網址，或從 `.txt` / `.csv` 匯入多個網址。
-4. 在「設定」調整儲存位置、畫質、並行數、速度上限、AI 字幕與 Proxy。
+4. 在「設定」調整儲存位置、畫質、同時下載數、單片執行緒、速度上限、AI 字幕與 Proxy。
 
 | 能力 | 現行行為 |
 |---|---|
 | 下載佇列 | 每項顯示狀態、進度與速度；佇列會保存，失敗項目可單獨重試 |
 | 並行下載 | 預設 2，最多 32 個影片下載；AI 字幕使用獨立背景佇列，不占用下載名額 |
+| 單片執行緒 | 每部影片的分段工作執行緒上限為 1–16，預設依 CPU 自動取值（最多 16）；實際來源可使用較少連線，SupJav 直連最多 4 條。使用 Proxy 時可調低以減少負載 |
 | 畫質偏好 | 最高、1080p、720p、480p、360p、最低；實際可用畫質依來源而定 |
 | AI 字幕 | 不產生、日文、英文、繁中或三語；翻譯預設在本機執行，也可自行設定 LLM API；輸出為播放器可切換的同名 SRT |
 | 網址操作 | 剪貼簿偵測、手動貼上、文字／CSV 批次匯入 |
@@ -78,7 +79,7 @@ SmartScreen 信譽提醒與 Defender Antivirus 隔離是不同事件。請先閱
 </p>
 
 1. 選擇儲存位置；若不選，會在執行檔旁自動建立 `tmp`。
-2. 按「顯示設定」調整基準日期、畫質、版本優先、AI 字幕與 Proxy；平常收合設定可把空間完整留給分類。
+2. 按「顯示設定」調整基準日期、畫質、單片執行緒、版本優先、AI 字幕與 Proxy；平常收合設定可把空間完整留給分類。
 3. 在三個網站分頁搜尋並勾選分類；支援群組全選。
 4. 按「排程」選擇每 1–168 小時，或每天依電腦本地時間在指定時刻檢查。
 5. 按「開始監控」。分類會保持可見；掃描或下載時才顯示進度，需要紀錄時按「顯示活動」。
@@ -132,11 +133,11 @@ python main.py
 # 自動監控工具
 python jable_smalltool.py
 
-# 單一網址、無 GUI，並指定下載位置
-python main.py --nogui --url "https://jable.tv/videos/example/" --output "/path/to/downloads"
+# 單一網址、無 GUI，並指定下載位置與每片 3 個下載執行緒
+python main.py --nogui --url "https://jable.tv/videos/example/" --output "/path/to/downloads" --max-workers-per-video 3
 ```
 
-`-o` 是 `--output` 的縮寫；若省略，預設會儲存在 `./download`。
+`-o` 是 `--output` 的縮寫；若省略，預設會儲存在 `./download`。`--max-workers-per-video` 接受 1–16，可在 Proxy 負載較高時調低。
 
 Linux 若未內建 Tk，請先用系統套件管理器安裝 `python3-tk`。macOS／Linux 是原始碼執行方式；Windows Release 才提供免安裝 EXE。
 
@@ -161,6 +162,7 @@ docker compose run --rm jabletv
 | 變數 | 用途 |
 |---|---|
 | `RESOLUTION` | `highest`、`1080`、`720`、`480`、`360`、`lowest` |
+| `MAX_WORKERS_PER_VIDEO` | 每部影片的分段工作執行緒上限，範圍 1–16；調低可減少 Proxy 負載 |
 | `URL` / `URLS` | 傳入一個或多個網址 |
 | `URLS_FILE` | 網址清單；預設 `/downloads/urls.txt` |
 | `DOWNLOAD_DIR` | 容器內儲存位置；預設 `/downloads` |

@@ -20,6 +20,13 @@ def get_parser():
     parser.add_argument(
         "-o", "--output", type=str, default="download", metavar="DIR",
         help="Output directory for downloads (default: ./download)")
+    parser.add_argument(
+        "--max-workers-per-video", type=int,
+        choices=range(
+            config.MIN_WORKERS_PER_VIDEO,
+            config.MAX_WORKERS_PER_VIDEO + 1),
+        default=None, metavar="N",
+        help="Maximum segment download workers per video (1-16)")
 
     return parser
 

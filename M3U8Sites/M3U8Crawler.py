@@ -38,7 +38,7 @@ class MirrorsBlockedError(Exception):
 
 
 request_headers = {'browser': 'firefox', 'platform': platform.system().lower()}
-default_max_workers = min(os.cpu_count() * 2, 16) if os.cpu_count() else 8
+default_max_workers = config.DEFAULT_MAX_WORKERS_PER_VIDEO
 
 _WINDOWS_FILENAME_TRANSLATION = str.maketrans({
     '<': '＜', '>': '＞', ':': '：', '"': '＂',
@@ -462,7 +462,7 @@ class M3U8Crawler:
         if result: return result.group(1)
         return None
 
-    def __init__(self, url, savepath="", silence=False):
+    def __init__(self, url, savepath="", silence=False, max_workers=None):
         self.silence = silence
         self._tsList = []
         self._key_content = None   # raw bytes of AES key
@@ -481,7 +481,9 @@ class M3U8Crawler:
         self._targetName = None
         self._imageUrl = None
         self._m3u8url = None
-        self._max_workers = default_max_workers
+        if max_workers is None:
+            max_workers = config.get_max_workers_per_video()
+        self._max_workers = config.normalize_max_workers_per_video(max_workers)
         self._progress_callback = None   # (downloaded, total, speed_bps) -> None
         self._speed_lock = threading.Lock()
         self._bytes_downloaded = 0

@@ -15,6 +15,7 @@ import csv
 
 from browser import BrowsePanel
 import M3U8Sites
+import config
 
 # ── Design tokens ────────────────────────────────────────────────────────
 BG        = '#0d0d18'
@@ -681,6 +682,32 @@ class MainWindow(tk.Tk):
         tk.Label(row3, text=f'(最多 {MAX_CONCURRENT})', bg=BG_SECTION,
                  fg=TEXT_DIM, font=FONT_SM).pack(side=tk.LEFT, padx=(8, 0))
 
+        # ── Segment workers per video ──────────────────────────────
+        row4 = tk.Frame(grp1, bg=BG_SECTION)
+        row4.pack(fill='x', pady=4)
+        tk.Label(row4, text='單片執行緒', bg=BG_SECTION, fg=TEXT_SEC,
+                 font=FONT_SM, width=12, anchor='e').pack(side=tk.LEFT)
+        self._workers_var = tk.StringVar(
+            value=str(config.get_max_workers_per_video()))
+        worker_opts = [
+            str(i) for i in range(
+                config.MIN_WORKERS_PER_VIDEO,
+                config.MAX_WORKERS_PER_VIDEO + 1)]
+        wm = tk.OptionMenu(
+            row4, self._workers_var, *worker_opts,
+            command=self._on_workers_change)
+        wm.config(bg=BG_INPUT, fg=TEXT_PRI, activebackground=BG_CARD,
+                  activeforeground=TEXT_PRI, relief='flat',
+                  highlightthickness=1, highlightbackground=BORDER,
+                  font=FONT_SM, bd=0, width=4)
+        wm['menu'].config(bg=BG_CARD, fg=TEXT_PRI,
+                          activebackground=ACCENT,
+                          activeforeground='#fff', font=FONT_SM)
+        wm.pack(side=tk.LEFT, padx=(8, 0))
+        tk.Label(
+            row4, text='降低可減少代理負載', bg=BG_SECTION,
+            fg=TEXT_DIM, font=FONT_SM).pack(side=tk.LEFT, padx=(8, 0))
+
         # ── About section ─────────────────────────────────────────
         grp2 = tk.LabelFrame(outer, text='關於', bg=BG_SECTION,
                               fg=TEXT_SEC, font=FONT_SEC_TITLE,
@@ -718,6 +745,11 @@ class MainWindow(tk.Tk):
         self._dlmgr.max_concurrent = n
         self._update_status()
         print(f'同時下載數: {n}', flush=True)
+
+    def _on_workers_change(self, val):
+        value = config.set_max_workers_per_video(val)
+        self._workers_var.set(str(value))
+        print(f'每部影片下載執行緒: {value}', flush=True)
 
     def _on_speed_change(self, val):
         from M3U8Sites.M3U8Crawler import speed_limiter

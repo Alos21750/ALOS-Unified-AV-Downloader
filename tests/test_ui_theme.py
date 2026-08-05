@@ -55,7 +55,7 @@ def test_primary_text_contrast_is_accessible_in_both_themes():
 
 
 def test_current_version_and_global_smalltool_copy_are_complete():
-    assert gui_modern.APP_VERSION == jable_smalltool.APP_VERSION == '2.5.40'
+    assert gui_modern.APP_VERSION == jable_smalltool.APP_VERSION == '2.5.41'
     required = {
         'st_activity', 'st_progress_idle', 'st_footer_short',
         'st_categories_expand', 'st_categories_collapse',
@@ -77,7 +77,7 @@ def test_current_version_and_global_smalltool_copy_are_complete():
         'st_scan_queued', 'st_waiting_schedule', 'st_stopping',
     }
     for language, strings in locales.STRINGS.items():
-        assert strings['version_label'] == 'v2.5.40', language
+        assert strings['version_label'] == 'v2.5.41', language
         assert required <= strings.keys(), language
 
 
@@ -85,14 +85,14 @@ def test_windows_version_resources_match_app_version():
     root = Path(__file__).resolve().parents[1]
     workflow = (root / '.github' / 'workflows' / 'windows-build.yml').read_text(
         encoding='utf-8')
-    assert '$expected = "2.5.40.0"' in workflow
+    assert '$expected = "2.5.41.0"' in workflow
     generator = (root / 'build_tmp' / 'gen_version.py').read_text(
         encoding='utf-8')
-    assert 'VERSION = (2, 5, 40, 0)' in generator
+    assert 'VERSION = (2, 5, 41, 0)' in generator
     for name in ('JableTV_Modern.version', 'Jable_smalltool.version'):
         resource = (root / 'build_tmp' / name).read_text(encoding='utf-8')
-        assert 'filevers=(2, 5, 40, 0)' in resource
-        assert "StringStruct('FileVersion', '2.5.40.0')" in resource
+        assert 'filevers=(2, 5, 41, 0)' in resource
+        assert "StringStruct('FileVersion', '2.5.41.0')" in resource
     for name in ('JableTV_Modern.spec', 'Jable_smalltool.spec'):
         spec = (root / 'build_tmp' / name).read_text(encoding='utf-8')
         assert "'numpy._core._exceptions'" in spec
@@ -259,7 +259,7 @@ def test_both_apps_expose_shared_recognition_quality_without_squeezing_copy():
     smalltool_ui = inspect.getsource(jable_smalltool.SmallToolApp._build_ui)
 
     assert 'self._recognition_quality_var = ctk.StringVar(' in modern_ui
-    assert "wraplength=760" in modern_ui
+    assert 'wraplength=SETTINGS_INLINE_HELP_WRAP' in modern_ui
     assert 'self._recognition_quality_var = tk.StringVar(' in smalltool_ui
     assert "wraplength=286" in smalltool_ui
     for source in (modern_ui, smalltool_ui):
@@ -359,6 +359,210 @@ def test_modern_concurrency_is_editable_persisted_and_clamped(monkeypatch):
     app._on_conc_change()
     assert saved == [99]
     assert app._conc_var.get() == '32'
+
+
+def test_both_apps_expose_and_persist_per_video_worker_limit(monkeypatch):
+    modern_ui = inspect.getsource(gui_modern.ModernApp._build_settings_tab)
+    smalltool_ui = inspect.getsource(jable_smalltool.SmallToolApp._build_ui)
+    for source in (modern_ui, smalltool_ui):
+        assert "T('max_workers_per_video_setting')" in source
+        assert "'max_workers_per_video_desc'" in source
+
+    assert gui_modern.SETTINGS_INLINE_HELP_WRAP <= 620
+    assert modern_ui.count(
+        'wraplength=SETTINGS_INLINE_HELP_WRAP') == 3
+    assert modern_ui.count("justify='left', anchor='w'") >= 3
+
+    class _Var:
+        def __init__(self, value):
+            self.value = value
+
+        def get(self):
+            return self.value
+
+        def set(self, value):
+            self.value = value
+
+    saved = []
+
+    def _save(value):
+        saved.append(value)
+        return max(1, min(int(value), 16))
+
+    monkeypatch.setattr(
+        gui_modern.config, 'set_max_workers_per_video', _save)
+    modern = gui_modern.ModernApp.__new__(gui_modern.ModernApp)
+    modern._workers_var = _Var('99')
+    modern._on_workers_change()
+
+    monkeypatch.setattr(
+        jable_smalltool.config, 'set_max_workers_per_video', _save)
+    smalltool = jable_smalltool.SmallToolApp.__new__(
+        jable_smalltool.SmallToolApp)
+    smalltool._workers_var = _Var('2')
+    smalltool._on_workers_change()
+
+    assert saved == [99, 2]
+    assert modern._workers_var.get() == '16'
+    assert smalltool._workers_var.get() == '2'
+
+
+def test_language_rebuild_commits_the_focused_worker_entry(monkeypatch):
+    class _Var:
+        def __init__(self, value):
+            self.value = value
+
+        def get(self):
+            return self.value
+
+        def set(self, value):
+            self.value = value
+
+    saved = []
+    monkeypatch.setattr(
+        gui_modern.config, 'get_max_workers_per_video', lambda: 16)
+    monkeypatch.setattr(
+        gui_modern.config, 'set_max_workers_per_video',
+        lambda value: saved.append(('modern', value)) or int(value))
+    modern = gui_modern.ModernApp.__new__(gui_modern.ModernApp)
+    modern._workers_var = _Var('3')
+    assert modern._commit_workers_preference() == 3
+    assert "'max_workers_per_video': self._commit_workers_preference()" in (
+        inspect.getsource(gui_modern.ModernApp._apply_language))
+
+    monkeypatch.setattr(
+        jable_smalltool.config, 'get_max_workers_per_video', lambda: 16)
+    monkeypatch.setattr(
+        jable_smalltool.config, 'set_max_workers_per_video',
+        lambda value: saved.append(('smalltool', value)) or int(value))
+    smalltool = jable_smalltool.SmallToolApp.__new__(
+        jable_smalltool.SmallToolApp)
+    smalltool._workers_var = _Var('3')
+    assert smalltool._commit_workers_preference() == 3
+    assert "'max_workers_per_video': self._commit_workers_preference()" in (
+        inspect.getsource(jable_smalltool.SmallToolApp._snapshot_ui_state))
+    assert "snapshot['max_workers_per_video']" in inspect.getsource(
+        jable_smalltool.SmallToolApp._restore_ui_state)
+
+    assert saved == [('modern', 3), ('smalltool', 3)]
+
+
+def test_supjav_thumbnail_context_reuses_cf_override_only_on_trusted_zone(
+        monkeypatch):
+    override = {'cookie': 'test-clearance', 'ua': 'Exact Browser UA'}
+    monkeypatch.setattr(
+        gui_modern.config, 'get_cf_override',
+        lambda host: dict(override) if host == 'supjav.com' else None)
+
+    request_headers, cookies = gui_modern._thumbnail_request_context(
+        'https://img.supjav.com/thumbs/example.jpg', 'SupJav')
+
+    assert request_headers['User-Agent'] == 'Exact Browser UA'
+    assert request_headers['Referer'] == 'https://supjav.com/'
+    assert cookies.get_dict(domain='.supjav.com') == {
+        'cf_clearance': 'test-clearance',
+    }
+    trusted = gui_modern.requests.Request(
+        'GET', 'https://img.supjav.com/thumb.jpg', cookies=cookies).prepare()
+    disguised = gui_modern.requests.Request(
+        'GET', 'https://img.supjav.com.evil.example/thumb.jpg',
+        cookies=cookies).prepare()
+    insecure = gui_modern.requests.Request(
+        'GET', 'http://img.supjav.com/thumb.jpg', cookies=cookies).prepare()
+    assert trusted.headers['Cookie'] == 'cf_clearance=test-clearance'
+    assert 'Cookie' not in disguised.headers
+    assert 'Cookie' not in insecure.headers
+
+    external_headers, external_cookies = gui_modern._thumbnail_request_context(
+        'https://images.example.test/thumb.jpg', 'SupJav')
+    assert external_headers['User-Agent'] == gui_modern.headers['User-Agent']
+    assert 'Referer' not in external_headers
+    assert external_cookies is None
+
+    for url, site_key in (
+            ('https://img.supjav.com.evil.example/thumb.jpg', 'SupJav'),
+            ('http://img.supjav.com/thumb.jpg', 'SupJav'),
+            ('https://img.supjav.com/thumb.jpg', 'JableTV')):
+        untrusted_headers, untrusted_cookies = (
+            gui_modern._thumbnail_request_context(url, site_key))
+        assert untrusted_headers == gui_modern.headers
+        assert untrusted_cookies is None
+
+
+def test_failed_thumbnail_replaces_loading_placeholder(monkeypatch):
+    configured = []
+
+    class _ImmediateExecutor:
+        def submit(self, callback):
+            callback()
+
+    class _Label:
+        def winfo_exists(self):
+            return True
+
+        def configure(self, **kwargs):
+            configured.append(kwargs)
+
+    app = gui_modern.ModernApp.__new__(gui_modern.ModernApp)
+    app._is_closing = False
+    app._grid_gen = 7
+    app._build_gen = 9
+    app._thumb_executor = _ImmediateExecutor()
+    app._ui = lambda callback, gen=None: callback()
+    monkeypatch.setattr(gui_modern, '_fetch_thumbnail', lambda *_args: None)
+
+    app._load_thumb_async(
+        'https://img.supjav.com/missing.jpg', _Label(), 7, 9, 'SupJav')
+
+    assert configured[-1]['text'] == gui_modern.T('no_thumbnail')
+
+
+def test_stale_supjav_thumbnail_override_retries_without_credentials(
+        monkeypatch):
+    calls = []
+
+    class _Response:
+        def __init__(self, status_code, content=b''):
+            self.status_code = status_code
+            self.content = content
+
+        def close(self):
+            pass
+
+    class _Session:
+        def get(self, url, **kwargs):
+            calls.append(kwargs)
+            if len(calls) == 1:
+                return _Response(403)
+            return _Response(200, b'image-bytes')
+
+    class _Image:
+        size = (300, 169)
+
+        def convert(self, _mode):
+            return self
+
+        def thumbnail(self, _size, _resample):
+            pass
+
+    monkeypatch.setattr(gui_modern, '_get_thumb_session', lambda: _Session())
+    monkeypatch.setattr(gui_modern.Image, 'open', lambda _stream: _Image())
+    monkeypatch.setattr(gui_modern, '_thumb_cache', {})
+    monkeypatch.setattr(
+        gui_modern.config, 'get_cf_override',
+        lambda _host: {'cookie': 'stale', 'ua': 'Stale UA'})
+
+    result = gui_modern._fetch_thumbnail(
+        'https://img.supjav.com/thumb.jpg', 'SupJav')
+
+    assert result is not None
+    assert len(calls) == 2
+    assert calls[0]['headers']['User-Agent'] == 'Stale UA'
+    assert calls[0]['cookies'].get_dict(domain='.supjav.com') == {
+        'cf_clearance': 'stale',
+    }
+    assert calls[1]['headers'] == gui_modern.headers
+    assert 'cookies' not in calls[1]
 
 
 def test_global_version_selector_saves_internal_preference(monkeypatch):

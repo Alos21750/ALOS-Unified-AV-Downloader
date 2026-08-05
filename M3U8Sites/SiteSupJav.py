@@ -355,7 +355,7 @@ class SiteSupJav(M3U8Crawler):
         return True
 
     def _download_direct_ranges(self, part, ref, start_time):
-        """Use four HTTP Range connections when the direct host advertises byte ranges.
+        """Use up to four HTTP Range connections when the host supports ranges.
         The shared requests session mounts SharedSSLAdapter, which is required for every
         concurrent HTTPS path in this project. Return None to keep the serial fallback."""
         session = _get_session()
@@ -382,7 +382,11 @@ class SiteSupJav(M3U8Crawler):
                 except Exception:
                     pass
 
-        ranges = _split_byte_ranges(total)
+        ranges = _split_byte_ranges(
+            total,
+            min(
+                _DIRECT_RANGE_WORKERS,
+                getattr(self, '_max_workers', _DIRECT_RANGE_WORKERS)))
         if len(ranges) == 1:
             return None
 

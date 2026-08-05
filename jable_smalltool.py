@@ -238,7 +238,7 @@ except Exception:
 
 # ── Constants ────────────────────────────────────────────────────────
 APP_NAME = 'Jable_smalltool'
-APP_VERSION = '2.5.40'
+APP_VERSION = '2.5.41'
 DEFAULT_WINDOW_WIDTH = 1180
 DEFAULT_WINDOW_HEIGHT = 780
 MIN_WINDOW_WIDTH = 760
@@ -1864,6 +1864,7 @@ class SmallToolApp(ctk.CTk):
             'subtitle_mode': normalize_subtitle_mode(
                 self._cfg.get('subtitle_mode')),
             'recognition_quality': config.get_recognition_quality(),
+            'max_workers_per_video': self._commit_workers_preference(),
             'running': self._worker.is_running(),
             'check_now_state': check_state,
             'status_key': self._status_key,
@@ -1888,6 +1889,7 @@ class SmallToolApp(ctk.CTk):
         self._subtitle_var.set(self._subtitle_label())
         self._recognition_quality_var.set(
             self._recognition_quality_label(snapshot['recognition_quality']))
+        self._workers_var.set(str(snapshot['max_workers_per_video']))
 
         for var in self._check_vars.values():
             var.set(False)
@@ -2330,6 +2332,35 @@ class SmallToolApp(ctk.CTk):
             dropdown_hover_color=BG_CARD_HOVER,
             dropdown_text_color=TEXT_PRI,
             font=(font_family, 10), dropdown_font=(font_family, 10)).pack(side='left')
+
+        workers_row = ctk.CTkFrame(res_group, fg_color='transparent')
+        workers_row.pack(fill='x', pady=(6, 0))
+        ctk.CTkLabel(
+            workers_row, text=T('max_workers_per_video_setting'),
+            text_color=TEXT_SEC, font=(font_family, 10, 'bold'),
+            width=108, anchor='e').pack(side='left', padx=(0, 8))
+        self._workers_var = tk.StringVar(
+            value=str(config.get_max_workers_per_video()))
+        self._workers_entry = ctk.CTkEntry(
+            workers_row, textvariable=self._workers_var,
+            width=72, height=34, corner_radius=CONTROL_RADIUS,
+            fg_color=BG_INPUT, border_color=BORDER, border_width=1,
+            text_color=TEXT_PRI, justify='center')
+        self._workers_entry.pack(side='left')
+        self._workers_entry.bind('<Return>', self._on_workers_change)
+        self._workers_entry.bind('<FocusOut>', self._on_workers_change)
+        ctk.CTkLabel(
+            workers_row, text=T('max_n', n=config.MAX_WORKERS_PER_VIDEO),
+            text_color=TEXT_DIM, font=(font_family, 9)).pack(
+                side='left', padx=(8, 0))
+        ctk.CTkLabel(
+            res_group,
+            text=T(
+                'max_workers_per_video_desc',
+                n=config.MAX_WORKERS_PER_VIDEO),
+            text_color=TEXT_DIM, font=(font_family, 8),
+            wraplength=286, justify='right').pack(
+                anchor='e', pady=(3, 0))
 
         version_row = ctk.CTkFrame(res_group, fg_color='transparent')
         version_row.pack(fill='x', pady=(6, 0))
@@ -3328,6 +3359,23 @@ class SmallToolApp(ctk.CTk):
         set_resolution_pref(pref)
         self._cfg['resolution'] = pref
         update_config({'resolution': pref})
+
+    def _commit_workers_preference(self):
+        current = config.get_max_workers_per_video()
+        var = self.__dict__.get('_workers_var')
+        if var is None:
+            return current
+        try:
+            requested = int(var.get().strip())
+        except (AttributeError, TypeError, ValueError):
+            value = current
+        else:
+            value = config.set_max_workers_per_video(requested)
+        var.set(str(value))
+        return value
+
+    def _on_workers_change(self, _event=None):
+        self._commit_workers_preference()
 
     def _on_version_change(self, val):
         pref = self._version_pref_from_label(val)

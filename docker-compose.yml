@@ -12,6 +12,7 @@ services:
       - ./downloads:/downloads
     environment:
       - RESOLUTION=highest        # highest | 1080 | 720 | 480
+      - MAX_WORKERS_PER_VIDEO=8   # max 1..16; lower to reduce proxy load
       - URLS_FILE=/downloads/urls.txt
     # This is a run-to-completion job, not a long-running service:
     restart: "no"

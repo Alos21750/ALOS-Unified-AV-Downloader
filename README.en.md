@@ -59,12 +59,13 @@ SmartScreen reputation warnings and Defender Antivirus quarantine are different 
 1. Open Browse, choose JableTV, MissAV, or SupJav, then select a category or search.
 2. Select multiple cards and add them to the queue, or download the selection immediately.
 3. You can also paste URLs on the Download tab or import a `.txt` / `.csv` list.
-4. Use Settings for the destination, quality, concurrency, speed limit, AI subtitles, and proxy.
+4. Use Settings for the destination, quality, concurrent videos, per-video workers, speed limit, AI subtitles, and proxy.
 
 | Capability | Current behavior |
 |---|---|
 | Download queue | Per-item state, progress, and speed; queue persistence; retry one failed item |
 | Concurrency | 2 video downloads by default, up to 32; AI subtitles run in a separate background queue without occupying download slots |
+| Per-video workers | An upper limit of 1–16 segment workers for each video, automatically derived from the CPU by default (up to 16). A source may use fewer; SupJav direct downloads use at most 4. Lower this when using a proxy to reduce load |
 | Quality preference | Highest, 1080p, 720p, 480p, 360p, or Lowest; actual variants depend on the source |
 | AI subtitles | Off, Japanese, English, Traditional Chinese, or all three; translation is local by default, with an optional user-configured LLM API; output is selectable sidecar SRT files |
 | URL input | Clipboard detection, manual paste, and text/CSV batch import |
@@ -78,7 +79,7 @@ SmartScreen reputation warnings and Defender Antivirus quarantine are different 
 </p>
 
 1. Choose a destination. If left unset, SmallTool creates `tmp` beside the executable.
-2. Select Show settings to change the baseline date, quality, version priority, AI subtitles, and proxy. Collapse settings afterward to give categories the full window.
+2. Select Show settings to change the baseline date, quality, per-video workers, version priority, AI subtitles, and proxy. Collapse settings afterward to give categories the full window.
 3. Search and select categories on any of the three site tabs; group-wide selection is available.
 4. Select Schedule to check every 1–168 hours or once a day at a specified computer-local time.
 5. Press Start Monitoring. Categories remain visible; progress appears only while work is active, and Show activity opens the log area when needed.
@@ -132,12 +133,13 @@ python main.py
 # Category monitor
 python jable_smalltool.py
 
-# One URL, no GUI, with an explicit output directory
-python main.py --nogui --url "https://jable.tv/videos/example/" --output "/path/to/downloads"
+# One URL, no GUI, with an explicit output directory and 3 workers per video
+python main.py --nogui --url "https://jable.tv/videos/example/" --output "/path/to/downloads" --max-workers-per-video 3
 ```
 
 `-o` is the short form of `--output`. If omitted, downloads are saved under
-`./download`.
+`./download`. `--max-workers-per-video` accepts 1–16 and can be lowered to
+reduce proxy load.
 
 On Linux, install `python3-tk` with your system package manager if Tk is not already available. macOS and Linux run from source; the portable EXE release is for Windows.
 
@@ -162,6 +164,7 @@ Environment variables:
 | Variable | Purpose |
 |---|---|
 | `RESOLUTION` | `highest`, `1080`, `720`, `480`, `360`, or `lowest` |
+| `MAX_WORKERS_PER_VIDEO` | Maximum segment workers per video, from 1–16; lower it to reduce proxy load |
 | `URL` / `URLS` | Pass one or more URLs |
 | `URLS_FILE` | URL list; defaults to `/downloads/urls.txt` |
 | `DOWNLOAD_DIR` | Container destination; defaults to `/downloads` |

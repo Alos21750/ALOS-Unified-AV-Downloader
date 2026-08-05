@@ -367,13 +367,14 @@ def test_direct_download_uses_parallel_ranges_and_assembles_file(monkeypatch, tm
     crawler._direct_referer = 'https://streamtape.example/e/test'
     crawler._progress_callback = None
     crawler._t2_executor = None
+    crawler._max_workers = 2
 
     assert crawler._download_direct() is True
     assert (tmp_path / 'parallel.mp4').read_bytes() == payload
     assert not (tmp_path / 'parallel.mp4.part').exists()
 
     range_calls = [value for value in calls if value != 'bytes=0-0']
-    assert len(range_calls) == 4
+    assert len(range_calls) == 2
 
 
 def test_direct_parallel_range_resumes_after_connection_reset(monkeypatch, tmp_path):

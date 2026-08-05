@@ -29,6 +29,10 @@ VALID_RECOGNITION_QUALITIES = {'auto', 'quality', 'balanced', 'fast'}
 DEFAULT_DOWNLOAD_CONCURRENCY = 2
 MIN_DOWNLOAD_CONCURRENCY = 1
 MAX_DOWNLOAD_CONCURRENCY = 32
+DEFAULT_MAX_WORKERS_PER_VIDEO = (
+    min(os.cpu_count() * 2, 16) if os.cpu_count() else 8)
+MIN_WORKERS_PER_VIDEO = 1
+MAX_WORKERS_PER_VIDEO = 16
 VALID_PROXY_SCHEMES = {
     'http', 'https', 'socks4', 'socks4a', 'socks5', 'socks5h',
 }
@@ -232,6 +236,34 @@ def set_download_concurrency(value):
         with _prefs_lock:
             prefs = _load_prefs()
             prefs['download_concurrency'] = normalized
+            _save_prefs(prefs)
+    except Exception:
+        pass
+    return normalized
+
+
+def normalize_max_workers_per_video(value):
+    """Return a safe per-video segment worker count (1–16)."""
+    try:
+        parsed = int(str(value).strip())
+    except (TypeError, ValueError):
+        parsed = DEFAULT_MAX_WORKERS_PER_VIDEO
+    return max(MIN_WORKERS_PER_VIDEO, min(parsed, MAX_WORKERS_PER_VIDEO))
+
+
+def get_max_workers_per_video():
+    """Return the persisted number of segment workers used by each video."""
+    return normalize_max_workers_per_video(
+        _load_prefs().get('max_workers_per_video'))
+
+
+def set_max_workers_per_video(value):
+    """Persist a clamped per-video segment worker limit for every client."""
+    normalized = normalize_max_workers_per_video(value)
+    try:
+        with _prefs_lock:
+            prefs = _load_prefs()
+            prefs['max_workers_per_video'] = normalized
             _save_prefs(prefs)
     except Exception:
         pass

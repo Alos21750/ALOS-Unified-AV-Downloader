@@ -177,7 +177,8 @@ if __name__ == "__main__":
         url_arg = av_recommand() or ""   # None (site changed/blocked) -> empty, not a crash
 
     if args.nogui:
-        M3U8Sites.consoles_main(url_arg, args.output)
+        M3U8Sites.consoles_main(
+            url_arg, args.output, args.max_workers_per_video)
     elif _USE_MODERN:
         _gui_main(url_arg, args.output)
     else:

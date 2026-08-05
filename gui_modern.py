@@ -15,6 +15,7 @@ import concurrent.futures
 import tkinter as tk
 from tkinter import filedialog, messagebox
 from typing import Optional
+from urllib.parse import urlsplit
 
 import customtkinter as ctk
 import requests
@@ -55,7 +56,7 @@ from ui_theme import (
     browse_columns_for_width,
 )
 
-APP_VERSION = '2.5.40'
+APP_VERSION = '2.5.41'
 
 # issue #24: startup breadcrumbs — no-op if crashlog unavailable
 try:
@@ -66,6 +67,7 @@ except Exception:
 
 DEFAULT_CONCURRENT = 2
 MAX_CONCURRENT = 32
+SETTINGS_INLINE_HELP_WRAP = 620
 MAX_VISIBLE_ROWS = 200
 ROW_BUILD_BUDGET = 40
 MAX_PERSIST_ROWS = 1000
@@ -739,20 +741,73 @@ def _get_thumb_session() -> requests.Session:
     return _thumb_session
 
 
-def _fetch_thumbnail(url: str) -> Optional[Image.Image]:
+def _thumbnail_request_context(url: str, site_key: str = ''):
+    """Build thumbnail headers and a domain-scoped SupJav clearance jar."""
+    request_headers = dict(headers)
+    cookies = None
+    try:
+        parsed = urlsplit(str(url or ''))
+        host = (parsed.hostname or '').lower().rstrip('.')
+    except (TypeError, ValueError):
+        return request_headers, cookies
+
+    trusted_supjav = (
+        str(site_key or '').lower() == 'supjav'
+        and parsed.scheme.lower() == 'https'
+        and host in {'supjav.com', 'www.supjav.com', 'img.supjav.com'}
+    )
+    if not trusted_supjav:
+        return request_headers, cookies
+
+    request_headers['Referer'] = 'https://supjav.com/'
+    override = config.get_cf_override('supjav.com') or {}
+    if override.get('ua'):
+        request_headers['User-Agent'] = override['ua']
+    if override.get('cookie'):
+        cookies = requests.cookies.RequestsCookieJar()
+        cookies.set(
+            'cf_clearance', override['cookie'], domain='.supjav.com',
+            path='/', secure=True)
+    return request_headers, cookies
+
+
+def _fetch_thumbnail(url: str, site_key: str = '') -> Optional[Image.Image]:
     """Download and decode a thumbnail; cached per-URL."""
     if not url:
         return None
     cached = _thumb_cache.get(url)
     if cached is not None:
         return cached
-    try:
-        r = _get_thumb_session().get(
-            url, headers=headers, timeout=12, **config.proxy_request_kwargs())
-        if r.status_code != 200:
-            return None
-        img = Image.open(io.BytesIO(r.content)).convert('RGB')
-        img.thumbnail(_THUMB_SIZE, Image.LANCZOS)
+    request_headers, cookies = _thumbnail_request_context(url, site_key)
+    attempts = [(request_headers, cookies)]
+    if request_headers != headers or cookies is not None:
+        # A saved browser context can expire.  Match the listing fetcher's
+        # behavior by trying one ordinary request before declaring failure.
+        attempts.append((dict(headers), None))
+
+    for attempt_headers, attempt_cookies in attempts:
+        request_kwargs = {
+            'headers': attempt_headers,
+            'timeout': 12,
+            **config.proxy_request_kwargs(),
+        }
+        if attempt_cookies is not None:
+            request_kwargs['cookies'] = attempt_cookies
+        response = None
+        try:
+            response = _get_thumb_session().get(url, **request_kwargs)
+            if response.status_code != 200:
+                continue
+            img = Image.open(io.BytesIO(response.content)).convert('RGB')
+            img.thumbnail(_THUMB_SIZE, Image.LANCZOS)
+        except Exception:
+            continue
+        finally:
+            if response is not None:
+                try:
+                    response.close()
+                except Exception:
+                    pass
         with _thumb_cache_lock:
             _thumb_cache[url] = img
             # Limit cache growth — under the lock so a concurrent insert can't resize the
@@ -761,8 +816,7 @@ def _fetch_thumbnail(url: str) -> Optional[Image.Image]:
                 for k in list(_thumb_cache.keys())[:40]:
                     _thumb_cache.pop(k, None)
         return img
-    except Exception:
-        return None
+    return None
 
 
 # ── Main App ─────────────────────────────────────────────────────────
@@ -1393,6 +1447,7 @@ class ModernApp(ctk.CTk):
                 'cf_ua': self._var_get('_cf_ua_var'),
                 'page_jump': self._var_get('_page_jump_var'),
                 'concurrency': self._dlmgr.max_concurrent,
+                'max_workers_per_video': self._commit_workers_preference(),
                 'speed_mbps': self._speed_mbps,
                 'resolution_pref': get_resolution_pref(),
                 'site_key': self._site_key,
@@ -1443,6 +1498,7 @@ class ModernApp(ctk.CTk):
             self._dl_url_var.set(snapshot['dl_url'])
             self._page_jump_var.set(snapshot['page_jump'])
             self._conc_var.set(str(snapshot['concurrency']))
+            self._workers_var.set(str(snapshot['max_workers_per_video']))
             self._speed_var.set(self._speed_label())
             self._res_var.set(self._resolution_label())
             if snapshot['cf_host']:
@@ -1954,6 +2010,37 @@ class ModernApp(ctk.CTk):
                      text_color=TEXT_DIM,
                      font=(ui_font(), 10)).pack(anchor='w', padx=(136, 0), pady=(0, 10))
 
+        # Segment workers used inside each individual video download
+        row_workers = ctk.CTkFrame(grp, fg_color='transparent')
+        row_workers.pack(fill='x', padx=20, pady=(8, 2))
+        ctk.CTkLabel(
+            row_workers, text=T('max_workers_per_video_setting'),
+            text_color=TEXT_PRI, font=(ui_font(), 12, 'bold'),
+            width=116, anchor='w').pack(side='left')
+        self._workers_var = ctk.StringVar(
+            value=str(config.get_max_workers_per_video()))
+        self._workers_entry = ctk.CTkEntry(
+            row_workers, textvariable=self._workers_var, width=80, height=34,
+            corner_radius=8, fg_color=BG_INPUT,
+            border_color=BORDER, border_width=1,
+            text_color=TEXT_PRI, justify='center')
+        self._workers_entry.pack(side='left', padx=10)
+        self._workers_entry.bind('<Return>', self._on_workers_change)
+        self._workers_entry.bind('<FocusOut>', self._on_workers_change)
+        ctk.CTkLabel(
+            row_workers,
+            text=T('max_n', n=config.MAX_WORKERS_PER_VIDEO),
+            text_color=TEXT_DIM, font=(ui_font(), 10)).pack(side='left')
+        ctk.CTkLabel(
+            grp,
+            text=T(
+                'max_workers_per_video_desc',
+                n=config.MAX_WORKERS_PER_VIDEO),
+            text_color=TEXT_DIM, font=(ui_font(), 10),
+            wraplength=SETTINGS_INLINE_HELP_WRAP,
+            justify='left', anchor='w').pack(
+                anchor='w', padx=(136, 20), pady=(0, 10))
+
         # Resolution preference
         row_res = ctk.CTkFrame(grp, fg_color='transparent')
         row_res.pack(fill='x', padx=20, pady=(8, 2))
@@ -2011,7 +2098,8 @@ class ModernApp(ctk.CTk):
         ctk.CTkLabel(
             grp, text=T('recognition_quality_desc'),
             text_color=TEXT_DIM, font=(ui_font(), 9),
-            wraplength=760, justify='left').pack(
+            wraplength=SETTINGS_INLINE_HELP_WRAP,
+            justify='left', anchor='w').pack(
                 anchor='w', padx=(136, 20), pady=(0, 4))
 
         row_translation = ctk.CTkFrame(grp, fg_color='transparent')
@@ -2035,7 +2123,9 @@ class ModernApp(ctk.CTk):
             command=self._open_translation_settings).pack(side='right')
         ctk.CTkLabel(
             grp, text=T('subtitle_desc'), text_color=TEXT_DIM,
-            font=(ui_font(), 10), wraplength=760, justify='left').pack(
+            font=(ui_font(), 10),
+            wraplength=SETTINGS_INLINE_HELP_WRAP,
+            justify='left', anchor='w').pack(
                 anchor='w', padx=(136, 20), pady=(0, 22))
 
         # App-scoped network proxy
@@ -2505,20 +2595,31 @@ class ModernApp(ctk.CTk):
 
             # Background thumbnail load
             if thumb_url:
-                self._load_thumb_async(thumb_url, thumb_lbl, gen, build_gen)
+                self._load_thumb_async(
+                    thumb_url, thumb_lbl, gen, build_gen, self._site_key)
             else:
                 thumb_lbl.configure(text=T('no_thumbnail'))
 
     def _load_thumb_async(self, thumb_url: str, label: ctk.CTkLabel,
-                          gen: int, build_gen: int):
+                          gen: int, build_gen: int, site_key: str = ''):
         """Fetch thumbnail in a background thread; marshal result back to the
         main thread via .after() so Tk widget updates stay thread-safe.
         The gen counter prevents stale thumbs from polluting a newer page."""
         def _worker():
             if self._is_closing or gen != self._grid_gen or build_gen != self._build_gen:
                 return
-            img = _fetch_thumbnail(thumb_url)
+            img = _fetch_thumbnail(thumb_url, site_key)
             if img is None:
+                def _apply_missing():
+                    if (self._is_closing or gen != self._grid_gen or
+                            build_gen != self._build_gen):
+                        return
+                    try:
+                        if label.winfo_exists():
+                            label.configure(text=T('no_thumbnail'), image=None)
+                    except Exception:
+                        pass
+                self._ui(_apply_missing, gen=build_gen)
                 return
             # Only apply if this label is still part of the current page.
             def _apply():
@@ -3053,6 +3154,23 @@ class ModernApp(ctk.CTk):
         value = config.set_download_concurrency(requested)
         self._dlmgr.max_concurrent = value
         self._conc_var.set(str(value))
+
+    def _commit_workers_preference(self):
+        current = config.get_max_workers_per_video()
+        var = self.__dict__.get('_workers_var')
+        if var is None:
+            return current
+        try:
+            requested = int(var.get().strip())
+        except (AttributeError, TypeError, ValueError):
+            value = current
+        else:
+            value = config.set_max_workers_per_video(requested)
+        var.set(str(value))
+        return value
+
+    def _on_workers_change(self, _event=None):
+        self._commit_workers_preference()
 
     def _pick_dest(self):
         d = filedialog.askdirectory()

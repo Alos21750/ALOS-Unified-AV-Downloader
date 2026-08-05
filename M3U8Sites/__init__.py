@@ -47,10 +47,14 @@ def VaildateUrl(url):
     return None
 
 
-def CreateSite(url, savepath="", silence=False):
+def CreateSite(url, savepath="", silence=False, max_workers=None):
     site = VaildateUrl(url)
     if site is None: return None
-    return site(url, savepath=savepath, silence=silence)
+    if max_workers is None:
+        return site(url, savepath=savepath, silence=silence)
+    return site(
+        url, savepath=savepath, silence=silence,
+        max_workers=max_workers)
 
 
 def CreateSiteUrlList(url, silence=False):
@@ -61,10 +65,10 @@ def CreateSiteUrlList(url, silence=False):
     return None
 
 
-def consoles_main(url, dest=None):
+def consoles_main(url, dest=None, max_workers=None):
     if not url or url == '':
         url = input('輸入支援的網址: ')
-    jjob = CreateSite(url, dest)
+    jjob = CreateSite(url, dest, max_workers=max_workers)
     if jjob and jjob.is_url_vaildate():
         jjob.start_download()
         print('下載完成!')

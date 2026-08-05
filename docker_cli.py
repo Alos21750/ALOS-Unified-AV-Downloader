@@ -26,6 +26,7 @@ except Exception:
     pass
 
 import M3U8Sites
+import config
 from M3U8Sites import M3U8Crawler
 
 
@@ -54,6 +55,11 @@ def main():
         except Exception:
             pass
 
+    max_workers = None
+    raw_workers = os.environ.get('MAX_WORKERS_PER_VIDEO')
+    if raw_workers is not None and raw_workers.strip():
+        max_workers = config.normalize_max_workers_per_video(raw_workers)
+
     urls = gather_urls()
     if not urls:
         print("no URL provided. Pass URL(s) as arguments, set the URLS env var, or add a"
@@ -61,12 +67,17 @@ def main():
               "  docker run --rm -v /nas/videos:/downloads ghcr.io/alos21750/jabletv <URL>", flush=True)
         return 2
 
-    print(f"下載目錄: {dest} | 解析度: {M3U8Crawler.get_resolution_pref()} | 共 {len(urls)} 個網址", flush=True)
+    worker_label = (
+        max_workers if max_workers is not None
+        else config.get_max_workers_per_video())
+    print(f"下載目錄: {dest} | 解析度: {M3U8Crawler.get_resolution_pref()} | "
+          f"每片執行緒: {worker_label} | 共 {len(urls)} 個網址", flush=True)
     ok = fail = 0
     for url in urls:
         print(f"\n========== {url} ==========", flush=True)
         try:
-            site = M3U8Sites.CreateSite(url, dest)
+            site = M3U8Sites.CreateSite(
+                url, dest, max_workers=max_workers)
             if site is None:
                 print(f"[跳過] 不支援的網址: {url}", flush=True); fail += 1; continue
             if not site.is_url_vaildate():

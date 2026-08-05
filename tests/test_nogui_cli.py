@@ -35,6 +35,15 @@ def test_parser_preserves_download_as_default_output():
     assert parsed.output == 'download'
 
 
+def test_parser_accepts_per_video_worker_limit():
+    parsed = cli_args.get_parser().parse_args([
+        '--nogui', '--url', 'https://jable.tv/videos/example/',
+        '--max-workers-per-video', '3',
+    ])
+
+    assert parsed.max_workers_per_video == 3
+
+
 def test_nogui_entrypoint_imports_downloader_and_forwards_output(
         monkeypatch, tmp_path):
     destination = str(tmp_path / 'downloads')
@@ -47,12 +56,14 @@ def test_nogui_entrypoint_imports_downloader_and_forwards_output(
             url='https://jable.tv/videos/example/',
             nogui=True,
             output=destination,
+            max_workers_per_video=3,
         ))
     fake_args.av_recommand = lambda: None
 
     fake_downloader = types.ModuleType('M3U8Sites')
     fake_downloader.consoles_main = (
-        lambda url, output: calls.append((url, output)))
+        lambda url, output, max_workers=None:
+        calls.append((url, output, max_workers)))
 
     fake_gui = types.ModuleType('gui_modern')
     fake_gui.gui_modern_main = lambda *_args: None
@@ -80,5 +91,5 @@ def test_nogui_entrypoint_imports_downloader_and_forwards_output(
     assert caught.value.code == 0
 
     assert calls == [
-        ('https://jable.tv/videos/example/', destination),
+        ('https://jable.tv/videos/example/', destination, 3),
     ]
