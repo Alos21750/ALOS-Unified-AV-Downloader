@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="./README.md">繁體中文</a> · <strong>English</strong>
+  <a href="./README.md">繁體中文</a> · <a href="./README.zh-CN.md">简体中文</a> · <strong>English</strong> · <a href="./README.ja.md">日本語</a>
 </p>
 
 <h1 align="center">JableTV Downloader</h1>
@@ -63,7 +63,7 @@ SmartScreen reputation warnings and Defender Antivirus quarantine are different 
 
 | Capability | Current behavior |
 |---|---|
-| Download queue | Per-item state, progress, and speed; queue persistence; retry one failed item |
+| Download queue | Per-item state, progress, and speed; queue persistence; stop and immediately requeue an active item, or retry one failed item |
 | Concurrency | 2 video downloads by default, up to 32; AI subtitles run in a separate background queue without occupying download slots |
 | Per-video workers | An upper limit of 1–16 segment workers for each video, automatically derived from the CPU by default (up to 16). A source may use fewer; SupJav direct downloads use at most 4. Lower this when using a proxy to reduce load |
 | Quality preference | Highest, 1080p, 720p, 480p, 360p, or Lowest; actual variants depend on the source |

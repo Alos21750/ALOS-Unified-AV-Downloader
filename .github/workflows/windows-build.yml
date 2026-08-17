@@ -11,6 +11,8 @@ on:
       - "THIRD_PARTY_NOTICES.md"
       - "README.md"
       - "README.en.md"
+      - "README.zh-CN.md"
+      - "README.ja.md"
       - "WINDOWS_SECURITY.md"
       - "third_party_licenses/**"
       - "scripts/**"
@@ -254,7 +256,7 @@ jobs:
       - name: Verify executable metadata
         shell: pwsh
         run: |
-          $expected = "2.5.41.0"
+          $expected = "2.5.42.0"
           $files = @(
             "dist\JableTV_Modern.exe",
             "dist\Jable_smalltool.exe",

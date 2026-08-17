@@ -55,7 +55,7 @@ def test_primary_text_contrast_is_accessible_in_both_themes():
 
 
 def test_current_version_and_global_smalltool_copy_are_complete():
-    assert gui_modern.APP_VERSION == jable_smalltool.APP_VERSION == '2.5.41'
+    assert gui_modern.APP_VERSION == jable_smalltool.APP_VERSION == '2.5.42'
     required = {
         'st_activity', 'st_progress_idle', 'st_footer_short',
         'st_categories_expand', 'st_categories_collapse',
@@ -75,9 +75,10 @@ def test_current_version_and_global_smalltool_copy_are_complete():
         'st_schedule_summary_daily', 'st_schedule_invalid_hours',
         'st_schedule_invalid_time', 'st_schedule_saved',
         'st_scan_queued', 'st_waiting_schedule', 'st_stopping',
+        'retry_short', 'requeue_short',
     }
     for language, strings in locales.STRINGS.items():
-        assert strings['version_label'] == 'v2.5.41', language
+        assert strings['version_label'] == 'v2.5.42', language
         assert required <= strings.keys(), language
 
 
@@ -85,14 +86,14 @@ def test_windows_version_resources_match_app_version():
     root = Path(__file__).resolve().parents[1]
     workflow = (root / '.github' / 'workflows' / 'windows-build.yml').read_text(
         encoding='utf-8')
-    assert '$expected = "2.5.41.0"' in workflow
+    assert '$expected = "2.5.42.0"' in workflow
     generator = (root / 'build_tmp' / 'gen_version.py').read_text(
         encoding='utf-8')
-    assert 'VERSION = (2, 5, 41, 0)' in generator
+    assert 'VERSION = (2, 5, 42, 0)' in generator
     for name in ('JableTV_Modern.version', 'Jable_smalltool.version'):
         resource = (root / 'build_tmp' / name).read_text(encoding='utf-8')
-        assert 'filevers=(2, 5, 41, 0)' in resource
-        assert "StringStruct('FileVersion', '2.5.41.0')" in resource
+        assert 'filevers=(2, 5, 42, 0)' in resource
+        assert "StringStruct('FileVersion', '2.5.42.0')" in resource
     for name in ('JableTV_Modern.spec', 'Jable_smalltool.spec'):
         spec = (root / 'build_tmp' / name).read_text(encoding='utf-8')
         assert "'numpy._core._exceptions'" in spec
@@ -148,10 +149,40 @@ def test_windows_distribution_is_hardened_and_verifiable():
     for documentation in (
         '"README.md"',
         '"README.en.md"',
+        '"README.zh-CN.md"',
+        '"README.ja.md"',
         '"THIRD_PARTY_NOTICES.md"',
         '"WINDOWS_SECURITY.md"',
     ):
         assert documentation in workflow
+
+
+def test_all_readme_languages_are_complete_and_cross_linked():
+    root = Path(__file__).resolve().parents[1]
+    readmes = {
+        'zh': root / 'README.md',
+        'zh-Hans': root / 'README.zh-CN.md',
+        'en': root / 'README.en.md',
+        'ja': root / 'README.ja.md',
+    }
+    language_labels = ('繁體中文', '简体中文', 'English', '日本語')
+
+    for language, path in readmes.items():
+        assert path.is_file(), language
+        text = path.read_text(encoding='utf-8')
+        assert '\ufffd' not in text, language
+        assert len(text.splitlines()) >= 190, language
+        assert all(label in text for label in language_labels), language
+        assert all(token in text for token in (
+            'JableTV_Modern.exe', 'Jable_smalltool.exe',
+            '.ja.srt', '.en.srt', '.zh-TW.srt',
+            'ghcr.io/alos21750/jabletv:latest',
+        )), language
+
+    assert '重新排隊' in readmes['zh'].read_text(encoding='utf-8')
+    assert '重新排队' in readmes['zh-Hans'].read_text(encoding='utf-8')
+    assert 'requeue' in readmes['en'].read_text(encoding='utf-8').lower()
+    assert '再キュー' in readmes['ja'].read_text(encoding='utf-8')
 
 
 def test_windows_security_guidance_does_not_ask_for_defender_bypass():

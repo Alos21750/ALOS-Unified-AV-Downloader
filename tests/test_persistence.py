@@ -1,6 +1,7 @@
 import csv
 import os
 import sys
+import threading
 import types
 
 
@@ -40,7 +41,13 @@ _stub_runtime_dependency('customtkinter', _customtkinter_stub)
 
 import config
 import gui_modern
-from gui_modern import DownloadItem, DownloadManager, _select_persist, _visible_window
+from gui_modern import (
+    DownloadItem,
+    DownloadManager,
+    _download_row_action,
+    _select_persist,
+    _visible_window,
+)
 
 
 def _item(url, state):
@@ -306,3 +313,147 @@ def test_row_retry_resets_transient_fields_and_requeues():
 
     assert (item.progress, item.speed, item.error) == (0, '', '')
     assert app._dlmgr.calls == [(item.url, r'C:\Videos')]
+
+
+def test_restart_active_download_cancels_then_requeues_same_item_first(
+        monkeypatch, tmp_path):
+    url = 'https://supjav.com/12345.html'
+    other_url = 'https://supjav.com/67890.html'
+    manager = DownloadManager(max_concurrent=1)
+    item = manager.add_item(
+        url, name='Slow download', state='下載中', dest=str(tmp_path))
+    item.progress = 47
+    item.speed = '81 KB/s'
+    item.error = 'old warning'
+
+    class FakeJob:
+        def __init__(self):
+            self.cancel_calls = []
+
+        def cancel_download(self, cleanup=True):
+            self.cancel_calls.append(cleanup)
+
+    old_task = gui_modern._DownloadTask(
+        url, str(tmp_path), manager._cancel_epoch)
+    old_task.job = FakeJob()
+    queued_task = gui_modern._DownloadTask(
+        other_url, str(tmp_path), manager._cancel_epoch)
+    with manager._lock:
+        manager._active[url] = old_task
+        manager._pending.append(queued_task)
+
+    started = []
+    monkeypatch.setattr(
+        manager, '_start_download_thread', lambda task: started.append(task))
+
+    assert manager.restart(url, str(tmp_path)) is True
+    assert old_task.cancelled.is_set()
+    assert old_task.job.cancel_calls == [True]
+    assert (item.state, item.progress, item.speed, item.error) == (
+        '等待中', 0, '', '')
+
+    # The replacement must only start after the old worker reaches its safe
+    # completion point, and it must be placed ahead of older queued work.
+    assert started == []
+    manager._complete_download(old_task, '已取消')
+
+    assert len(started) == 1
+    replacement = started[0]
+    assert replacement is manager._active[url]
+    assert replacement is not old_task
+    assert replacement.url == url
+    assert replacement.dest == str(tmp_path)
+    assert manager._pending == [queued_task]
+
+
+def test_remove_after_restart_request_never_resurrects_item(monkeypatch, tmp_path):
+    url = 'https://supjav.com/12345.html'
+    manager = DownloadManager(max_concurrent=1)
+    manager.add_item(url, state='下載中', dest=str(tmp_path))
+    task = gui_modern._DownloadTask(url, str(tmp_path), manager._cancel_epoch)
+    with manager._lock:
+        manager._active[url] = task
+    monkeypatch.setattr(manager, '_start_download_thread', lambda _task: None)
+
+    assert manager.restart(url, str(tmp_path)) is True
+    manager.remove_item(url)
+    manager._complete_download(task, '已取消')
+
+    assert manager.get_items() == []
+    assert manager.active_count == 0
+    assert manager.pending_count == 0
+
+
+def test_restart_waits_for_old_cleanup_before_starting_replacement(
+        monkeypatch, tmp_path):
+    url = 'https://supjav.com/12345.html'
+    manager = DownloadManager(max_concurrent=1)
+    manager.add_item(url, state='下載中', dest=str(tmp_path))
+    cleanup_started = threading.Event()
+    allow_cleanup_finish = threading.Event()
+
+    class SlowCleanupJob:
+        def cancel_download(self, cleanup=True):
+            assert cleanup is True
+            cleanup_started.set()
+            assert allow_cleanup_finish.wait(2)
+
+    task = gui_modern._DownloadTask(url, str(tmp_path), manager._cancel_epoch)
+    task.job = SlowCleanupJob()
+    with manager._lock:
+        manager._active[url] = task
+    started = []
+    monkeypatch.setattr(
+        manager, '_start_download_thread', lambda next_task: started.append(next_task))
+
+    restart_thread = threading.Thread(
+        target=manager.restart, args=(url, str(tmp_path)))
+    restart_thread.start()
+    assert cleanup_started.wait(1)
+
+    completion_thread = threading.Thread(
+        target=manager._complete_download, args=(task, '已取消'))
+    completion_thread.start()
+    completion_thread.join(0.05)
+    assert completion_thread.is_alive()
+    assert started == []
+
+    allow_cleanup_finish.set()
+    restart_thread.join(1)
+    completion_thread.join(1)
+    assert not restart_thread.is_alive()
+    assert not completion_thread.is_alive()
+    assert len(started) == 1
+    assert started[0] is manager._active[url]
+
+
+def test_cancel_all_after_restart_request_suppresses_replacement(
+        monkeypatch, tmp_path):
+    url = 'https://supjav.com/12345.html'
+    manager = DownloadManager(max_concurrent=1)
+    item = manager.add_item(url, state='下載中', dest=str(tmp_path))
+    task = gui_modern._DownloadTask(url, str(tmp_path), manager._cancel_epoch)
+    with manager._lock:
+        manager._active[url] = task
+    started = []
+    monkeypatch.setattr(
+        manager, '_start_download_thread', lambda next_task: started.append(next_task))
+
+    assert manager.restart(url, str(tmp_path)) is True
+    manager.cancel_all(cleanup=False)
+    manager._complete_download(task, '已取消')
+
+    assert started == []
+    assert manager.active_count == 0
+    assert manager.pending_count == 0
+    assert item.state == '已取消'
+
+
+def test_download_row_action_exposes_requeue_only_for_active_video_states():
+    assert _download_row_action(_item('preparing', '準備中')) == 'requeue'
+    assert _download_row_action(_item('downloading', '下載中')) == 'requeue'
+    assert _download_row_action(_item('failed', '未完成')) == 'retry'
+    assert _download_row_action(_item('blocked', '封鎖/解析失敗')) == 'retry'
+    assert _download_row_action(_item('cancelled', '已取消')) == 'retry'
+    assert _download_row_action(_item('queued', '等待中')) == ''
+    assert _download_row_action(_item('done', '已下載')) == ''

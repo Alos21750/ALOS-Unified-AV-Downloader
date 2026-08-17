@@ -1,5 +1,5 @@
 <p align="center">
-  <strong>繁體中文</strong> · <a href="./README.en.md">English</a>
+  <strong>繁體中文</strong> · <a href="./README.zh-CN.md">简体中文</a> · <a href="./README.en.md">English</a> · <a href="./README.ja.md">日本語</a>
 </p>
 
 <h1 align="center">JableTV Downloader</h1>
@@ -63,7 +63,7 @@ SmartScreen 信譽提醒與 Defender Antivirus 隔離是不同事件。請先閱
 
 | 能力 | 現行行為 |
 |---|---|
-| 下載佇列 | 每項顯示狀態、進度與速度；佇列會保存，失敗項目可單獨重試 |
+| 下載佇列 | 每項顯示狀態、進度與速度；佇列會保存；進行中的工作可停止並優先重新排隊，失敗項目可單獨重試 |
 | 並行下載 | 預設 2，最多 32 個影片下載；AI 字幕使用獨立背景佇列，不占用下載名額 |
 | 單片執行緒 | 每部影片的分段工作執行緒上限為 1–16，預設依 CPU 自動取值（最多 16）；實際來源可使用較少連線，SupJav 直連最多 4 條。使用 Proxy 時可調低以減少負載 |
 | 畫質偏好 | 最高、1080p、720p、480p、360p、最低；實際可用畫質依來源而定 |

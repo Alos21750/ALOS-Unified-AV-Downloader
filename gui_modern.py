@@ -56,7 +56,7 @@ from ui_theme import (
     browse_columns_for_width,
 )
 
-APP_VERSION = '2.5.41'
+APP_VERSION = '2.5.42'
 
 # issue #24: startup breadcrumbs — no-op if crashlog unavailable
 try:
@@ -126,6 +126,16 @@ def _select_persist(items, cap):
     return [i for i in items if id(i) in keep_ids]
 
 
+def _download_row_action(item):
+    """Return the retry action exposed by a download-row button."""
+    if item.state in {'準備中', '下載中'}:
+        return 'requeue'
+    if (item.state in {'未完成', '封鎖/解析失敗', '已取消'} or
+            (item.state == '已下載' and bool(item.error))):
+        return 'retry'
+    return ''
+
+
 # ── Download Manager ────────────────────────────────────────────────
 class DownloadItem:
     __slots__ = (
@@ -183,6 +193,12 @@ class DownloadManager:
         self._subtitle_pending: list[_DownloadTask] = []
         self._subtitle_active: dict[str, _DownloadTask] = {}
         self._items: dict[str, DownloadItem] = {}
+        # Active tasks requested for restart stay registered until their old
+        # worker reaches _complete_download().  Only then is the replacement
+        # inserted at the front of the queue, preventing two workers from
+        # touching the same temporary files at once.
+        self._restart_pending: dict[
+            str, tuple[_DownloadTask, str, threading.Event]] = {}
         # RLock: enqueue() and cancel_all() call _set_state() while holding
         # the lock — a plain Lock would deadlock the caller (often the main
         # GUI thread, freezing the app).
@@ -230,6 +246,9 @@ class DownloadManager:
     def remove_item(self, url: str):
         with self._lock:
             self._items.pop(url, None)
+            restart = self._restart_pending.pop(url, None)
+            if restart is not None:
+                restart[2].set()
             removed = [task for task in self._pending if task.url == url]
             self._pending = [task for task in self._pending if task.url != url]
             removed_subtitles = [
@@ -248,6 +267,39 @@ class DownloadManager:
         self._cancel_contexts(contexts)
         if removed_subtitles:
             self._try_next_subtitle()
+
+    def restart(self, url: str, dest: str) -> bool:
+        """Cancel one active video and safely put a fresh task first in line."""
+        with self._lock:
+            item = self._items.get(url)
+            task = self._active.get(url)
+            if item is None or task is None:
+                return False
+
+            restart_dest = dest or task.dest or item.dest
+            existing = self._restart_pending.get(url)
+            if existing is not None and existing[0] is task:
+                self._restart_pending[url] = (
+                    task, restart_dest, existing[2])
+                return True
+
+            item.dest = restart_dest
+            cleanup_done = threading.Event()
+            self._restart_pending[url] = (
+                task, restart_dest, cleanup_done)
+            task.cancelled.set()
+            self._set_state(url, '等待中', progress=0, error='')
+
+        # Keep cleanup outside the manager lock.  The replacement is created
+        # by _complete_download only after start_download() has returned.
+        try:
+            self._cancel_contexts([task], cleanup=True)
+        finally:
+            # The old worker can finish as soon as its cancel flag changes.
+            # This gate also waits for temporary-file cleanup to finish before
+            # a replacement is allowed to touch the same destination.
+            cleanup_done.set()
+        return True
 
     def enqueue(self, url: str, dest: str):
         start_task = None
@@ -275,6 +327,9 @@ class DownloadManager:
     def cancel_all(self, cleanup: bool = True):
         with self._lock:
             self._cancel_epoch += 1
+            for _task, _dest, cleanup_done in self._restart_pending.values():
+                cleanup_done.set()
+            self._restart_pending.clear()
             pending = list(self._pending)
             pending_subtitles = list(self._subtitle_pending)
             self._pending.clear()
@@ -539,13 +594,40 @@ class DownloadManager:
     def _complete_download(self, task: _DownloadTask, state: str,
                            progress: int = -1, error=None):
         with self._lock:
+            restart = self._restart_pending.get(task.url)
+            cleanup_done = (
+                restart[2]
+                if restart is not None and restart[0] is task
+                else None)
+        if cleanup_done is not None:
+            cleanup_done.wait()
+
+        with self._lock:
             if self._active.get(task.url) is not task:
                 return
-            if self._context_cancelled_locked(task) and state != '已取消':
-                state, progress, error = '已取消', -1, None
-            self._set_state(
-                task.url, state, progress=progress, error=error)
+            restart = self._restart_pending.get(task.url)
+            restart_requested = (
+                restart is not None
+                and restart[0] is task
+                and task.epoch == self._cancel_epoch
+                and task.url in self._items)
+            context_cancelled = self._context_cancelled_locked(task)
             self._active.pop(task.url, None)
+            if restart_requested:
+                self._restart_pending.pop(task.url, None)
+                item = self._items[task.url]
+                replacement = _DownloadTask(
+                    task.url, restart[1], self._cancel_epoch,
+                    item.source_subtitle_evidence)
+                self._pending.insert(0, replacement)
+                self._set_state(
+                    task.url, '等待中', progress=0, error='')
+            else:
+                self._restart_pending.pop(task.url, None)
+                if context_cancelled and state != '已取消':
+                    state, progress, error = '已取消', -1, None
+                self._set_state(
+                    task.url, state, progress=progress, error=error)
         self._try_next()
 
     def _complete_subtitle(self, task: _DownloadTask, state: str,
@@ -3023,10 +3105,14 @@ class ModernApp(ctk.CTk):
         item = next((i for i in self._dlmgr.get_items() if i.url == url), None)
         if item is None:
             return
+        dest = item.dest or self._dest_var.get() or 'download'
+        restart = getattr(self._dlmgr, 'restart', None)
+        if callable(restart) and restart(url, dest):
+            return
         item.progress = 0
         item.speed = ''
         item.error = ''
-        self._dlmgr.enqueue(url, item.dest or self._dest_var.get() or 'download')
+        self._dlmgr.enqueue(url, dest)
 
     def _cancel_all(self):
         self._dlmgr.cancel_all()
@@ -3452,11 +3538,11 @@ class ModernApp(ctk.CTk):
             remove_btn.pack(side='right', padx=(6, 14))
 
             retry_btn = ctk.CTkButton(
-                row, text='↻', width=32, height=32,
+                row, text='', width=82, height=32,
                 corner_radius=CONTROL_RADIUS,
                 fg_color='transparent', border_width=1, border_color=BORDER_HOVER,
                 hover_color=BG_CARD_HOVER,
-                text_color=ACCENT, font=('Consolas', 14, 'bold'),
+                text_color=ACCENT, font=(ui_font(), 10, 'bold'),
                 command=lambda u=item.url: self._retry_download(u))
 
             metrics = ctk.CTkFrame(row, fg_color='transparent')
@@ -3494,6 +3580,7 @@ class ModernApp(ctk.CTk):
                 'retry_btn': retry_btn, '_before_remove': remove_btn,
                 'pb_visible': False, 'pct_visible': False, 'spd_visible': False,
                 'retry_visible': False,
+                'last_retry_action': None,
                 'last_state': None, 'last_name': None, 'last_detail': None,
                 'last_progress': -1, 'last_speed': None,
             }
@@ -3549,12 +3636,21 @@ class ModernApp(ctk.CTk):
                 return
             w['last_detail'] = detail
 
-        retryable = (item.state in ('未完成', '封鎖/解析失敗', '已取消')
-                     or (item.state == '已下載' and bool(item.error)))
-        if retryable and not w['retry_visible']:
+        retry_action = _download_row_action(item)
+        if w['last_retry_action'] != retry_action:
+            if retry_action:
+                label = T(
+                    'requeue_short' if retry_action == 'requeue'
+                    else 'retry_short')
+                try:
+                    w['retry_btn'].configure(text=f'↻ {label}')
+                except Exception:
+                    return
+            w['last_retry_action'] = retry_action
+        if retry_action and not w['retry_visible']:
             w['retry_btn'].pack(side='right', padx=(2, 0), before=w['_before_remove'])
             w['retry_visible'] = True
-        elif not retryable and w['retry_visible']:
+        elif not retry_action and w['retry_visible']:
             try:
                 w['retry_btn'].pack_forget()
             except Exception:
