@@ -4,7 +4,7 @@
 from pathlib import Path
 
 
-VERSION = (2, 5, 42, 0)
+VERSION = (2, 5, 43, 0)
 HERE = Path(__file__).resolve().parent
 
 
@@ -30,7 +30,7 @@ VSVersionInfo(
         StringStruct('FileVersion', '{dotted}'),
         StringStruct('InternalName', '{internal_name}'),
         StringStruct('OriginalFilename', '{original_filename}'),
-        StringStruct('ProductName', 'JableTV, MissAV & SupJav Downloader'),
+        StringStruct('ProductName', 'JableTV, MissAV, SupJav & Hanime1 Downloader'),
         StringStruct('ProductVersion', '{dotted}')
       ])
     ]),
@@ -42,10 +42,10 @@ VSVersionInfo(
 
 FILES = (
     ('JableTV_Modern.version', 'JableTV_Modern',
-     'JableTV, MissAV & SupJav Video Downloader GUI',
+     'JableTV, MissAV, SupJav & Hanime1 Video Downloader GUI',
      'JableTV_Modern.exe'),
     ('Jable_smalltool.version', 'Jable_smalltool',
-     'JableTV, MissAV & SupJav Batch Download Tool',
+     'JableTV, MissAV, SupJav & Hanime1 Batch Download Tool',
      'Jable_smalltool.exe'),
 )
 

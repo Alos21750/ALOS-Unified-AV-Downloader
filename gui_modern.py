@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # coding: utf-8
-"""Modern GUI for JableTV, MissAV, and SupJav Downloader by ALOS — CustomTkinter Material Design."""
+"""Modern GUI for JableTV, MissAV, SupJav, and Hanime1 Downloader by ALOS."""
 
 import os
 import sys
@@ -29,6 +29,7 @@ from ssl_util import SharedSSLAdapter, get_shared_ssl_context
 from M3U8Sites.SiteJableTV import JableTVBrowser
 from M3U8Sites.SiteMissAV import MissAVBrowser
 from M3U8Sites.SiteSupJav import SupJavBrowser
+from M3U8Sites.SiteHanime1 import Hanime1Browser, SiteHanime1
 from M3U8Sites.M3U8Crawler import MirrorsBlockedError
 from config import headers
 from locales import T, set_lang, get_lang, ui_font, LANGUAGES, state_label
@@ -56,7 +57,7 @@ from ui_theme import (
     browse_columns_for_width,
 )
 
-APP_VERSION = '2.5.42'
+APP_VERSION = '2.5.43'
 
 # issue #24: startup breadcrumbs — no-op if crashlog unavailable
 try:
@@ -79,6 +80,7 @@ SITES = {
     'JableTV': {'browser': JableTVBrowser},
     'MissAV': {'browser': MissAVBrowser},
     'SupJav': {'browser': SupJavBrowser},
+    'Hanime1': {'browser': Hanime1Browser},
 }
 
 
@@ -919,7 +921,7 @@ class ModernApp(ctk.CTk):
         set_lang(stored or 'en')
         self._needs_lang_prompt = (stored is None)
 
-        self.title('JableTV · MissAV · SupJav Downloader — by ALOS')
+        self.title('JableTV · MissAV · SupJav · Hanime1 Downloader — by ALOS')
         self.geometry('1280x820')
         self.minsize(980, 680)
         self.configure(fg_color=BG_DARK)
@@ -1605,7 +1607,7 @@ class ModernApp(ctk.CTk):
         # Brand — stacked to keep the product name readable at compact widths.
         brand = ctk.CTkFrame(header, fg_color='transparent')
         brand.pack(side='left', padx=24, fill='y')
-        ctk.CTkLabel(brand, text='JableTV · MissAV · SupJav',
+        ctk.CTkLabel(brand, text='JableTV · MissAV · SupJav · Hanime1',
                      font=(ui_font(), 17, 'bold'),
                      text_color=TEXT_PRI).pack(anchor='w', pady=(9, 0))
         ctk.CTkLabel(brand, text='DOWNLOADER  /  ALOS',
@@ -2407,7 +2409,7 @@ class ModernApp(ctk.CTk):
         about_body = ctk.CTkFrame(about, fg_color='transparent')
         about_body.pack(fill='x', padx=20, pady=16)
 
-        ctk.CTkLabel(about_body, text='JableTV · MissAV · SupJav Downloader',
+        ctk.CTkLabel(about_body, text='JableTV · MissAV · SupJav · Hanime1 Downloader',
                      text_color=TEXT_PRI,
                      font=(ui_font(), 15, 'bold')).pack(anchor='w')
         ctk.CTkLabel(about_body, text='by ALOS (Alos21750)',
@@ -2507,10 +2509,8 @@ class ModernApp(ctk.CTk):
                 url = f'{base}&from={page_snapshot}'
             else:
                 url = f'{base.rstrip("/")}/?from={page_snapshot}'
-        elif site_key == 'SupJav':
-            url = SupJavBrowser.page_url(base, page_snapshot)
         else:
-            url = MissAVBrowser.page_url(base, page_snapshot)
+            url = browser.page_url(base, page_snapshot)
 
         def _fetch():
             blocked = False
@@ -2861,6 +2861,8 @@ class ModernApp(ctk.CTk):
             self._current_base_url = f'https://jable.tv/search/?q={quote(q, safe="")}'
         elif self._site_key == 'SupJav':
             self._current_base_url = SupJavBrowser.search_url(q, lang=T('supjav_lang'))
+        elif self._site_key == 'Hanime1':
+            self._current_base_url = Hanime1Browser.search_url(q)
         else:
             lang = T('missav_lang')
             eq = quote(q, safe='')
@@ -2996,12 +2998,15 @@ class ModernApp(ctk.CTk):
         print(T('url_not_supported') + f': {url}')
 
     def _is_listing_url(self, url: str) -> bool:
-        """Check if URL is a JableTV, MissAV, or SupJav listing/category/actress page."""
+        """Check if URL is a supported listing/category/actress page."""
         if re.match(r'https://(?:www\.)?supjav\.com/(?:(?:zh|ja)/)?\d+\.html$', url):
+            return False
+        if SiteHanime1.validate_url(url):
             return False
         return (bool(re.match(r'https://(?:www\.)?(?:jable\.tv|fs1\.app)/', url)) or
                 bool(re.match(r'https://(?:www\.)?(?:missav\.(?:ai|ws|live)|missav123\.com)/', url)) or
-                bool(re.match(r'https://(?:www\.)?supjav\.com/', url)))
+                bool(re.match(r'https://(?:www\.)?supjav\.com/', url)) or
+                bool(re.match(r'https://(?:www\.)?hanime1\.me/', url)))
 
     def _crawl_listing(self, url: str, dest: str):
         """Crawl a listing URL across all pages; add every video to the queue."""
@@ -3009,6 +3014,7 @@ class ModernApp(ctk.CTk):
         seen: set[str] = set()
         is_jable = bool(re.match(r'https://(?:www\.)?(?:jable\.tv|fs1\.app)/', url))
         is_supjav = bool(re.match(r'https://(?:www\.)?supjav\.com/', url))
+        is_hanime1 = bool(re.match(r'https://(?:www\.)?hanime1\.me/', url))
         max_pages = 50
 
         for page in range(1, max_pages + 1):
@@ -3026,6 +3032,9 @@ class ModernApp(ctk.CTk):
                 elif is_supjav:
                     page_url = SupJavBrowser.page_url(url, page)
                     videos = SupJavBrowser.fetch_page(page_url)
+                elif is_hanime1:
+                    page_url = Hanime1Browser.page_url(url, page)
+                    videos = Hanime1Browser.fetch_page(page_url)
                 else:
                     page_url = MissAVBrowser.page_url(url, page)
                     videos = MissAVBrowser.fetch_page(page_url)
@@ -3054,6 +3063,7 @@ class ModernApp(ctk.CTk):
                     candidate['_site'] = (
                         'JableTV' if is_jable
                         else 'SupJav' if is_supjav
+                        else 'Hanime1' if is_hanime1
                         else 'MissAV')
                     candidate['_source_listing_url'] = url
                     self._dlmgr.add_item(

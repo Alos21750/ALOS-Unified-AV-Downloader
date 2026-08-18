@@ -55,7 +55,7 @@ def test_primary_text_contrast_is_accessible_in_both_themes():
 
 
 def test_current_version_and_global_smalltool_copy_are_complete():
-    assert gui_modern.APP_VERSION == jable_smalltool.APP_VERSION == '2.5.42'
+    assert gui_modern.APP_VERSION == jable_smalltool.APP_VERSION == '2.5.43'
     required = {
         'st_activity', 'st_progress_idle', 'st_footer_short',
         'st_categories_expand', 'st_categories_collapse',
@@ -78,7 +78,7 @@ def test_current_version_and_global_smalltool_copy_are_complete():
         'retry_short', 'requeue_short',
     }
     for language, strings in locales.STRINGS.items():
-        assert strings['version_label'] == 'v2.5.42', language
+        assert strings['version_label'] == 'v2.5.43', language
         assert required <= strings.keys(), language
 
 
@@ -86,14 +86,14 @@ def test_windows_version_resources_match_app_version():
     root = Path(__file__).resolve().parents[1]
     workflow = (root / '.github' / 'workflows' / 'windows-build.yml').read_text(
         encoding='utf-8')
-    assert '$expected = "2.5.42.0"' in workflow
+    assert '$expected = "2.5.43.0"' in workflow
     generator = (root / 'build_tmp' / 'gen_version.py').read_text(
         encoding='utf-8')
-    assert 'VERSION = (2, 5, 42, 0)' in generator
+    assert 'VERSION = (2, 5, 43, 0)' in generator
     for name in ('JableTV_Modern.version', 'Jable_smalltool.version'):
         resource = (root / 'build_tmp' / name).read_text(encoding='utf-8')
-        assert 'filevers=(2, 5, 42, 0)' in resource
-        assert "StringStruct('FileVersion', '2.5.42.0')" in resource
+        assert 'filevers=(2, 5, 43, 0)' in resource
+        assert "StringStruct('FileVersion', '2.5.43.0')" in resource
     for name in ('JableTV_Modern.spec', 'Jable_smalltool.spec'):
         spec = (root / 'build_tmp' / name).read_text(encoding='utf-8')
         assert "'numpy._core._exceptions'" in spec

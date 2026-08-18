@@ -37,6 +37,8 @@ def test_smalltool_registry_has_complete_grouped_targets():
     assert [len(g['targets']) for g in SITES['MissAV']['groups']] == [7, 22, 37, 36]
     assert len(list(iter_targets('SupJav'))) == 10
     assert [len(g['targets']) for g in SITES['SupJav']['groups']] == [4, 6]
+    assert len(list(iter_targets('Hanime1'))) == 24
+    assert [len(g['targets']) for g in SITES['Hanime1']['groups']] == [9, 9, 6]
 
 
 def test_target_ids_are_unique_and_legacy_names_still_resolve():
@@ -70,3 +72,7 @@ def test_smalltool_uses_site_specific_pagination_and_supjav_dates():
     assert worker._parse_supjav_listing_date('2026/07/12').isoformat() == (
         '2026-07-12T00:00:00+00:00')
     assert worker._parse_supjav_listing_date('') is None
+    assert worker._build_page_url(
+        'Hanime1', 'https://hanime1.me/search?genre=3DCG', 2
+    ) == 'https://hanime1.me/search?genre=3DCG&page=2'
+    assert worker._parse_relative_date('16小時前').isoformat().endswith('+00:00')

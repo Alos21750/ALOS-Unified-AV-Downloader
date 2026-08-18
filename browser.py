@@ -12,6 +12,7 @@ import config
 from ssl_util import SharedSSLAdapter
 from M3U8Sites.SiteJableTV import JableTVBrowser
 from M3U8Sites.SiteMissAV import MissAVBrowser
+from M3U8Sites.SiteHanime1 import Hanime1Browser
 
 # ── Design tokens (synced with gui.py) ───────────────────────────────────
 BG        = '#0d0d18'
@@ -153,6 +154,7 @@ class BrowsePanel(tk.Frame):
     SITES = {
         'JableTV':  {'browser': JableTVBrowser},
         'MissAV':   {'browser': MissAVBrowser},
+        'Hanime1':  {'browser': Hanime1Browser},
     }
 
     def __init__(self, master, on_add_url=None, on_download_urls=None, **kw):
@@ -551,6 +553,8 @@ class BrowsePanel(tk.Frame):
         from urllib.parse import quote
         if self._site_key == 'JableTV':
             self._current_base_url = f'https://jable.tv/search/?q={quote(q, safe="")}'
+        elif self._site_key == 'Hanime1':
+            self._current_base_url = Hanime1Browser.search_url(q)
         else:
             self._current_base_url = f'https://missav.ai/search/{quote(q, safe="")}'
         self._page = 1
@@ -608,7 +612,7 @@ class BrowsePanel(tk.Frame):
             # Category URL — uses ?from=N
             base = base.rstrip('/')
             return f'{base}/?from={self._page}'
-        return MissAVBrowser.page_url(self._current_base_url, self._page)
+        return self._browser().page_url(self._current_base_url, self._page)
 
     def _trigger_load(self):
         if self._loading:

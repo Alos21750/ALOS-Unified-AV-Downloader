@@ -5,7 +5,7 @@
 <h1 align="center">JableTV Downloader</h1>
 
 <p align="center">
-  Desktop downloading and category monitoring for JableTV, MissAV, and SupJav, with <strong>built-in AI subtitles</strong>.<br />
+  Desktop downloading and category monitoring for JableTV, MissAV, SupJav, and Hanime1, with <strong>built-in AI subtitles</strong>.<br />
   <strong>Download the video, then automatically add AI subtitles:</strong> local Japanese speech transcription can create Japanese, English, and Traditional Chinese SRT files.<br />
   Use <strong>Modern</strong> to browse and pick videos, or <strong>SmallTool</strong> to keep watching selected feeds.
 </p>
@@ -56,7 +56,7 @@ SmartScreen reputation warnings and Defender Antivirus quarantine are different 
 
 ## Modern: browse, pick, download
 
-1. Open Browse, choose JableTV, MissAV, or SupJav, then select a category or search.
+1. Open Browse, choose JableTV, MissAV, SupJav, or Hanime1, then select a category or search.
 2. Select multiple cards and add them to the queue, or download the selection immediately.
 3. You can also paste URLs on the Download tab or import a `.txt` / `.csv` list.
 4. Use Settings for the destination, quality, concurrent videos, per-video workers, speed limit, AI subtitles, and proxy.
@@ -65,7 +65,7 @@ SmartScreen reputation warnings and Defender Antivirus quarantine are different 
 |---|---|
 | Download queue | Per-item state, progress, and speed; queue persistence; stop and immediately requeue an active item, or retry one failed item |
 | Concurrency | 2 video downloads by default, up to 32; AI subtitles run in a separate background queue without occupying download slots |
-| Per-video workers | An upper limit of 1–16 segment workers for each video, automatically derived from the CPU by default (up to 16). A source may use fewer; SupJav direct downloads use at most 4. Lower this when using a proxy to reduce load |
+| Per-video workers | An upper limit of 1–16 segment workers for each video, automatically derived from the CPU by default (up to 16). A source may use fewer; SupJav/Hanime1 direct downloads use at most 4. Lower this when using a proxy to reduce load |
 | Quality preference | Highest, 1080p, 720p, 480p, 360p, or Lowest; actual variants depend on the source |
 | AI subtitles | Off, Japanese, English, Traditional Chinese, or all three; translation is local by default, with an optional user-configured LLM API; output is selectable sidecar SRT files |
 | URL input | Clipboard detection, manual paste, and text/CSV batch import |
@@ -80,7 +80,7 @@ SmartScreen reputation warnings and Defender Antivirus quarantine are different 
 
 1. Choose a destination. If left unset, SmallTool creates `tmp` beside the executable.
 2. Select Show settings to change the baseline date, quality, per-video workers, version priority, AI subtitles, and proxy. Collapse settings afterward to give categories the full window.
-3. Search and select categories on any of the three site tabs; group-wide selection is available.
+3. Search and select categories on any of the four site tabs; group-wide selection is available.
 4. Select Schedule to check every 1–168 hours or once a day at a specified computer-local time.
 5. Press Start Monitoring. Categories remain visible; progress appears only while work is active, and Show activity opens the log area when needed.
 
@@ -89,6 +89,7 @@ SmartScreen reputation warnings and Defender Antivirus quarantine are different 
 | JableTV | 129 | Feeds/rankings, primary categories, and tag groups |
 | MissAV | 102 | Feeds/rankings, categories/tags, and makers |
 | SupJav | 10 | Feeds/rankings and primary categories |
+| Hanime1 | 24 | Release/upload/ranking feeds, 9 video genres, and feature tags such as Chinese subtitles |
 
 SmallTool can check every 1–168 hours or once a day at a specified time using this computer's local time; existing settings continue to default to every 24 hours. Check Now runs one immediate check without creating another recurring schedule. When the same recognized title code appears across categories or sites, the candidate matching your selected version priority is kept. If a code cannot be identified reliably, only an identical URL is deduplicated—SmallTool does not guess.
 
@@ -115,8 +116,11 @@ State is stored in `.Jable_smalltool` beside the executable when writable, other
 | JableTV | ✓ | ✓ | ✓ |
 | MissAV | ✓ | ✓ | ✓ |
 | SupJav | ✓ | ✓ | ✓ |
+| Hanime1 | ✓ | ✓ | ✓ |
 
 Sites and CDNs can change without notice. If one stops working, update first, then open an Issue with reproducible details.
+
+Hanime1 support covers official `watch?v=` URLs, search, pagination, sorting, genres, and common tags. The downloader resolves fresh signed MP4 URLs, applies the selected quality preference, and provides up to four ranged connections, resume, and a serial fallback.
 
 ## Run from source
 

@@ -9,6 +9,7 @@ from locales import T
 from M3U8Sites.SiteJableTV import JableTVBrowser
 from M3U8Sites.SiteMissAV import MissAVBrowser
 from M3U8Sites.SiteSupJav import SupJavBrowser
+from M3U8Sites.SiteHanime1 import Hanime1Browser
 
 
 def _target(target_id, name, url, **extra):
@@ -185,10 +186,45 @@ SUPJAV_GROUPS = [
 ]
 
 
+_HANIME1_URLS = dict(Hanime1Browser.CATEGORIES)
+HANIME1_GROUPS = [
+    _group('feeds', 'Feeds', [
+        _target(target_id, name, _HANIME1_URLS[name])
+        for target_id, name in (
+            ('sort:latest-release', '最新上市'),
+            ('sort:latest-upload', '最新上傳'),
+            ('sort:daily', '本日排行'),
+            ('sort:weekly', '本週排行'),
+            ('sort:monthly', '本月排行'),
+            ('sort:views', '觀看次數'),
+            ('sort:rating', '讚好比例'),
+            ('sort:longest', '時長最長'),
+            ('sort:watching', '他們在看'),
+        )
+    ]),
+    _group('genres', 'Genres', [
+        _target(f'genre:{index}', name, _HANIME1_URLS[name])
+        for index, name in enumerate(Hanime1Browser.GENRES, start=1)
+    ]),
+    _group('categories', 'Categories', [
+        _target(target_id, name, _HANIME1_URLS[name])
+        for target_id, name in (
+            ('tag:chinese-subtitle', '中文字幕'),
+            ('tag:chinese-dub', '中文配音'),
+            ('tag:uncensored', '無碼'),
+            ('tag:ai-decoded', 'AI解碼'),
+            ('tag:1080p', '1080p'),
+            ('tag:60fps', '60FPS'),
+        )
+    ]),
+]
+
+
 SITES = {
     'JableTV': {'browser': JableTVBrowser, 'groups': JABLE_GROUPS},
     'MissAV': {'browser': MissAVBrowser, 'groups': MISSAV_GROUPS},
     'SupJav': {'browser': SupJavBrowser, 'groups': SUPJAV_GROUPS},
+    'Hanime1': {'browser': Hanime1Browser, 'groups': HANIME1_GROUPS},
 }
 
 

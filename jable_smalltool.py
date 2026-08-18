@@ -2,7 +2,7 @@
 # coding: utf-8
 """Jable SmallTool — auto-downloader with site/category/date selection.
 
-Supports JableTV, MissAV, and SupJav. The user picks which sites and categories
+Supports JableTV, MissAV, SupJav, and Hanime1. The user picks sites and categories
 (multi-select), and a baseline date. The worker scans selected categories
 daily and downloads any new video it hasn't seen before.
 
@@ -238,7 +238,7 @@ except Exception:
 
 # ── Constants ────────────────────────────────────────────────────────
 APP_NAME = 'Jable_smalltool'
-APP_VERSION = '2.5.42'
+APP_VERSION = '2.5.43'
 DEFAULT_WINDOW_WIDTH = 1180
 DEFAULT_WINDOW_HEIGHT = 780
 MIN_WINDOW_WIDTH = 760
@@ -1342,9 +1342,13 @@ class SmallToolWorker:
                         consecutive_skips = 0
                         self._log(f'    [KEEP] {vurl.rstrip("/").split("/")[-1]} — {rel_text}')
                     else:
-                        # SupJav exposes YYYY/MM/DD directly on each listing card.
+                        # SupJav exposes an absolute date; Hanime1 exposes a
+                        # relative date directly on each listing card.
                         rel_text = v.get('date', '')
-                        video_dt = self._parse_supjav_listing_date(rel_text)
+                        video_dt = (
+                            self._parse_relative_date(rel_text)
+                            if site_name == 'Hanime1'
+                            else self._parse_supjav_listing_date(rel_text))
                         if video_dt is None:
                             self._log(f'    [SKIP] no confirmed date ({rel_text!r}): {vurl}')
                             consecutive_skips += 1

@@ -14,9 +14,9 @@ FONTS = {
 STRINGS = {
     'zh': {
         # Header
-        'app_brand_1': 'JableTV · MissAV · SupJav',
+        'app_brand_1': 'JableTV · MissAV · SupJav · Hanime1',
         'app_brand_2': 'Downloader',
-        'version_label': 'v2.5.42',
+        'version_label': 'v2.5.43',
         'by_author': 'by ALOS',
         'status_ready': '就緒',
         'site_label': '網站',
@@ -154,9 +154,9 @@ STRINGS = {
         'concurrent_setting': '同時下載數',
         'concurrent_desc': '只計算影片下載（1–32）；AI 字幕使用獨立背景佇列，不會占用下載名額',
         'max_workers_per_video_setting': '單片執行緒',
-        'max_workers_per_video_desc': '每部影片的分段工作執行緒上限（1–{n}）；來源可使用較少連線，SupJav 直連最多 4 條。降低可減少代理伺服器負載。',
+        'max_workers_per_video_desc': '每部影片的分段工作執行緒上限（1–{n}）；來源可使用較少連線，SupJav／Hanime1 直連最多 4 條。降低可減少代理伺服器負載。',
         'about': '關於',
-        'app_full_name': 'JableTV · MissAV · SupJav Downloader',
+        'app_full_name': 'JableTV · MissAV · SupJav · Hanime1 Downloader',
         'disclaimer': '僅供學習與研究用途',
 
         # Smalltool
@@ -354,9 +354,9 @@ STRINGS = {
     },
     'en': {
         # Header
-        'app_brand_1': 'JableTV · MissAV · SupJav',
+        'app_brand_1': 'JableTV · MissAV · SupJav · Hanime1',
         'app_brand_2': 'Downloader',
-        'version_label': 'v2.5.42',
+        'version_label': 'v2.5.43',
         'by_author': 'by ALOS',
         'status_ready': 'Ready',
         'site_label': 'Site',
@@ -495,9 +495,9 @@ STRINGS = {
         'concurrent_setting': 'Concurrent Downloads',
         'concurrent_desc': 'Video downloads only (1–32). AI subtitles use a separate background queue and do not occupy download slots.',
         'max_workers_per_video_setting': 'Per-video workers',
-        'max_workers_per_video_desc': 'Upper limit for segment workers per video (1–{n}); a source may use fewer, and SupJav direct downloads use at most 4. Lower it to reduce proxy load.',
+        'max_workers_per_video_desc': 'Upper limit for segment workers per video (1–{n}); a source may use fewer, and SupJav/Hanime1 direct downloads use at most 4. Lower it to reduce proxy load.',
         'about': 'About',
-        'app_full_name': 'JableTV · MissAV · SupJav Downloader',
+        'app_full_name': 'JableTV · MissAV · SupJav · Hanime1 Downloader',
         'disclaimer': 'For educational and research purposes only',
 
         # Smalltool
@@ -695,9 +695,9 @@ STRINGS = {
     },
     'zh-Hans': {
         # Header
-        'app_brand_1': 'JableTV · MissAV · SupJav',
+        'app_brand_1': 'JableTV · MissAV · SupJav · Hanime1',
         'app_brand_2': '下载器',
-        'version_label': 'v2.5.42',
+        'version_label': 'v2.5.43',
         'by_author': 'by ALOS',
         'status_ready': '就绪',
         'site_label': '网站',
@@ -835,9 +835,9 @@ STRINGS = {
         'concurrent_setting': '并发下载数',
         'concurrent_desc': '仅计算视频下载（1–32）；AI 字幕使用独立后台队列，不占用下载名额',
         'max_workers_per_video_setting': '单片线程数',
-        'max_workers_per_video_desc': '每部视频的分段工作线程上限（1–{n}）；来源可使用更少连接，SupJav 直连最多 4 条。降低可减少代理服务器负载。',
+        'max_workers_per_video_desc': '每部视频的分段工作线程上限（1–{n}）；来源可使用更少连接，SupJav／Hanime1 直连最多 4 条。降低可减少代理服务器负载。',
         'about': '关于',
-        'app_full_name': 'JableTV · MissAV · SupJav 下载器',
+        'app_full_name': 'JableTV · MissAV · SupJav · Hanime1 下载器',
         'disclaimer': '仅供学习与研究使用',
 
         # Smalltool
@@ -1035,9 +1035,9 @@ STRINGS = {
     },
     'ja': {
         # Header
-        'app_brand_1': 'JableTV · MissAV · SupJav',
+        'app_brand_1': 'JableTV · MissAV · SupJav · Hanime1',
         'app_brand_2': 'ダウンローダー',
-        'version_label': 'v2.5.42',
+        'version_label': 'v2.5.43',
         'by_author': 'by ALOS',
         'status_ready': '準備完了',
         'site_label': 'サイト',
@@ -1176,9 +1176,9 @@ STRINGS = {
         'concurrent_setting': '同時ダウンロード数',
         'concurrent_desc': '動画ダウンロードのみ（1～32）。AI 字幕は別のバックグラウンドキューで処理され、ダウンロード枠を使いません。',
         'max_workers_per_video_setting': '動画別ワーカー数',
-        'max_workers_per_video_desc': '動画1本あたりの分割ワーカー上限（1～{n}）。配信元によっては少なくなり、SupJav の直接取得は最大4接続です。小さくするとプロキシ負荷を抑えられます。',
+        'max_workers_per_video_desc': '動画1本あたりの分割ワーカー上限（1～{n}）。配信元によっては少なくなり、SupJav／Hanime1 の直接取得は最大4接続です。小さくするとプロキシ負荷を抑えられます。',
         'about': 'このアプリについて',
-        'app_full_name': 'JableTV · MissAV · SupJav ダウンローダー',
+        'app_full_name': 'JableTV · MissAV · SupJav · Hanime1 ダウンローダー',
         'disclaimer': '学習および研究目的でのみ使用してください',
 
         # Smalltool

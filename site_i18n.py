@@ -1,5 +1,7 @@
 """Display-name localization for site-provided browse labels."""
 
+from urllib.parse import urlencode
+
 from locales import get_lang
 
 
@@ -163,6 +165,84 @@ CATEGORY_I18N = {
     'https://supjav.com/category/english-subtitles': {'en': 'English Subtitles', 'zh': '英文字幕', 'zh-Hans': '英文字幕', 'ja': '英語字幕'},
     'https://supjav.com/category/reducing-mosaic': {'en': 'Mosaic Removed', 'zh': '破壞版', 'zh-Hans': '破坏版', 'ja': 'モザイク破壊版'},
 }
+
+
+def _hanime1_filter_url(key, value):
+    return 'https://hanime1.me/search?' + urlencode([(key, value)])
+
+
+_HANIME1_LABELS = {
+    ('sort', '最新上市'): {
+        'en': 'Latest Releases', 'zh': '最新上市',
+        'zh-Hans': '最新上市', 'ja': '新着発売'},
+    ('sort', '最新上傳'): {
+        'en': 'Latest Uploads', 'zh': '最新上傳',
+        'zh-Hans': '最新上传', 'ja': '最新アップロード'},
+    ('sort', '本日排行'): {
+        'en': 'Daily Ranking', 'zh': '本日排行',
+        'zh-Hans': '今日排行', 'ja': 'デイリーランキング'},
+    ('sort', '本週排行'): {
+        'en': 'Weekly Ranking', 'zh': '本週排行',
+        'zh-Hans': '本周排行', 'ja': '週間ランキング'},
+    ('sort', '本月排行'): {
+        'en': 'Monthly Ranking', 'zh': '本月排行',
+        'zh-Hans': '本月排行', 'ja': '月間ランキング'},
+    ('sort', '觀看次數'): {
+        'en': 'Most Viewed', 'zh': '觀看次數',
+        'zh-Hans': '观看次数', 'ja': '再生回数'},
+    ('sort', '讚好比例'): {
+        'en': 'Top Rated', 'zh': '讚好比例',
+        'zh-Hans': '好评率', 'ja': '高評価率'},
+    ('sort', '時長最長'): {
+        'en': 'Longest', 'zh': '時長最長',
+        'zh-Hans': '时长最长', 'ja': '長時間順'},
+    ('sort', '他們在看'): {
+        'en': 'Watching Now', 'zh': '他們在看',
+        'zh-Hans': '他们在看', 'ja': '視聴中'},
+    ('genre', '裏番'): {
+        'en': 'Hentai Anime', 'zh': '裏番',
+        'zh-Hans': '里番', 'ja': '裏アニメ'},
+    ('genre', '泡麵番'): {
+        'en': 'Short Anime', 'zh': '泡麵番',
+        'zh-Hans': '泡面番', 'ja': 'ショートアニメ'},
+    ('genre', 'Motion Anime'): {
+        'en': 'Motion Anime', 'zh': 'Motion Anime',
+        'zh-Hans': 'Motion Anime', 'ja': 'モーションアニメ'},
+    ('genre', '3DCG'): {
+        'en': '3DCG', 'zh': '3DCG', 'zh-Hans': '3DCG', 'ja': '3DCG'},
+    ('genre', '2.5D'): {
+        'en': '2.5D', 'zh': '2.5D', 'zh-Hans': '2.5D', 'ja': '2.5D'},
+    ('genre', '2D動畫'): {
+        'en': '2D Animation', 'zh': '2D動畫',
+        'zh-Hans': '2D动画', 'ja': '2Dアニメ'},
+    ('genre', 'AI生成'): {
+        'en': 'AI Generated', 'zh': 'AI生成',
+        'zh-Hans': 'AI生成', 'ja': 'AI生成'},
+    ('genre', 'MMD'): {
+        'en': 'MMD', 'zh': 'MMD', 'zh-Hans': 'MMD', 'ja': 'MMD'},
+    ('genre', 'Cosplay'): {
+        'en': 'Cosplay', 'zh': 'Cosplay',
+        'zh-Hans': 'Cosplay', 'ja': 'コスプレ'},
+    ('tags[]', '中文字幕'): {
+        'en': 'Chinese Subtitles', 'zh': '中文字幕',
+        'zh-Hans': '中文字幕', 'ja': '中国語字幕'},
+    ('tags[]', '中文配音'): {
+        'en': 'Chinese Dub', 'zh': '中文配音',
+        'zh-Hans': '中文配音', 'ja': '中国語吹替'},
+    ('tags[]', '無碼'): {
+        'en': 'Uncensored', 'zh': '無碼',
+        'zh-Hans': '无码', 'ja': '無修正'},
+    ('tags[]', 'AI解碼'): {
+        'en': 'AI Decoded', 'zh': 'AI解碼',
+        'zh-Hans': 'AI解码', 'ja': 'AIデコード'},
+    ('tags[]', '1080p'): {
+        'en': '1080p', 'zh': '1080p', 'zh-Hans': '1080p', 'ja': '1080p'},
+    ('tags[]', '60FPS'): {
+        'en': '60 FPS', 'zh': '60 FPS', 'zh-Hans': '60 FPS', 'ja': '60 FPS'},
+}
+
+for (_key, _value), _labels in _HANIME1_LABELS.items():
+    CATEGORY_I18N[_hanime1_filter_url(_key, _value)] = _labels
 
 
 def loc(table, key, fallback=''):

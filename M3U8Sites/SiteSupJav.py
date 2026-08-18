@@ -187,6 +187,8 @@ def _parse_videos(soup):
 class SiteSupJav(M3U8Crawler):
     website_pattern = r'https://supjav\.com/(?:(?:zh|ja)/)?\d+\.html$'
     website_dirname_pattern = r'https://supjav\.com/(?:(?:zh|ja)/)?(\d+)\.html$'
+    direct_site_name = 'SupJav'
+    direct_default_referer = 'https://supjav.com/'
 
     def _transform_segment(self, data):
         return _strip_fake_header(data)
@@ -321,7 +323,7 @@ class SiteSupJav(M3U8Crawler):
         out = self._get_video_savename()
         part = out + '.part'
         self._safe_remove(part)
-        ref = self._direct_referer or 'https://supjav.com/'
+        ref = self._direct_referer or self.direct_default_referer
         start = time.time()
         try:
             try:
@@ -329,8 +331,10 @@ class SiteSupJav(M3U8Crawler):
             except Exception:
                 if self._cancel_job:
                     raise
-                print('\n[SupJav] Parallel ranges failed; retrying with one resumable connection.',
-                      flush=True)
+                print(
+                    f'\n[{self.direct_site_name}] Parallel ranges failed; '
+                    'retrying with one resumable connection.',
+                    flush=True)
                 self._safe_remove(part)
                 ranged = None
             if ranged is None:

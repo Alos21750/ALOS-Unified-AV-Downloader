@@ -4,7 +4,7 @@
 
 from collections import defaultdict
 import re
-from urllib.parse import unquote, urlsplit
+from urllib.parse import parse_qs, unquote, urlsplit
 
 
 DEFAULT_VERSION_PREFERENCE = 'chinese-subtitle'
@@ -20,6 +20,7 @@ SOURCE_PRIORITY = {
     'JableTV': 0,
     'MissAV': 1,
     'SupJav': 2,
+    'Hanime1': 3,
 }
 
 # These tokens are deliberately closed and small because they are persisted by
@@ -31,6 +32,7 @@ TRUSTED_CHINESE_SUBTITLE_EVIDENCE = frozenset({
     'missav-category-chinese-subtitle',
     'missav-url-chinese-subtitle',
     'supjav-category-chinese-subtitle',
+    'hanime1-tag-chinese-subtitle',
 })
 MAX_SOURCE_SUBTITLE_EVIDENCE_TEXT = 512
 _TRUSTED_MISSAV_HOSTS = frozenset({
@@ -46,6 +48,9 @@ _TRUSTED_JABLE_HOSTS = frozenset({
 _TRUSTED_SUPJAV_HOSTS = frozenset({
     'supjav.com', 'www.supjav.com',
 })
+_TRUSTED_HANIME1_HOSTS = frozenset({
+    'hanime1.me', 'www.hanime1.me',
+})
 
 _TARGET_VERSION = {
     'category:chinese-subtitle': 'chinese-subtitle',
@@ -56,6 +61,8 @@ _TARGET_VERSION = {
     'feed:uncensored-leak': 'uncensored',
     'category:reducing-mosaic': 'reducing-mosaic',
     'category:censored': 'standard',
+    'tag:chinese-subtitle': 'chinese-subtitle',
+    'tag:uncensored': 'uncensored',
 }
 
 _VERSION_SUFFIXES = (
@@ -83,6 +90,8 @@ def site_from_url(url: str) -> str:
         return 'MissAV'
     if host == 'supjav.com' or host.endswith('.supjav.com'):
         return 'SupJav'
+    if host == 'hanime1.me' or host.endswith('.hanime1.me'):
+        return 'Hanime1'
     return ''
 
 
@@ -133,6 +142,8 @@ def _trusted_source_site(url: str) -> str:
         return 'MissAV'
     if host in _TRUSTED_SUPJAV_HOSTS:
         return 'SupJav'
+    if host in _TRUSTED_HANIME1_HOSTS:
+        return 'Hanime1'
     return ''
 
 
@@ -171,6 +182,14 @@ def _trusted_listing_evidence(site: str, listing_url: str) -> str:
                 r'/(?:(?:zh|ja)/)?category/chinese-subtitles/?',
                 path):
             return 'supjav-category-chinese-subtitle'
+        return ''
+
+    if site == 'Hanime1':
+        if host not in _TRUSTED_HANIME1_HOSTS or path.rstrip('/') != '/search':
+            return ''
+        tags = parse_qs(parsed.query, keep_blank_values=True).get('tags[]', [])
+        if '中文字幕' in tags:
+            return 'hanime1-tag-chinese-subtitle'
     return ''
 
 
@@ -207,6 +226,7 @@ def trusted_chinese_subtitle_evidence(video: dict) -> tuple[str, ...]:
             'missav-url-chinese-subtitle',
         },
         'SupJav': {'supjav-category-chinese-subtitle'},
+        'Hanime1': {'hanime1-tag-chinese-subtitle'},
     }.get(site, set())
     if site_consistent:
         evidence.update(
