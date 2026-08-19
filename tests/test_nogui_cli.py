@@ -4,9 +4,9 @@ import sys
 import types
 from pathlib import Path
 
-import alos_downloader
-from alos_downloader import apps, cli, core
-from alos_downloader.cli import args as cli_args
+import uav_downloader
+from uav_downloader import apps, cli, core
+from uav_downloader.cli import args as cli_args
 import pytest
 
 
@@ -51,7 +51,7 @@ def test_nogui_entrypoint_imports_downloader_and_forwards_output(
     destination = str(tmp_path / 'downloads')
     calls = []
 
-    fake_args = types.ModuleType('alos_downloader.cli.args')
+    fake_args = types.ModuleType('uav_downloader.cli.args')
     fake_args.get_parser = lambda: types.SimpleNamespace(
         parse_args=lambda: argparse.Namespace(
             random=False,
@@ -62,25 +62,25 @@ def test_nogui_entrypoint_imports_downloader_and_forwards_output(
         ))
     fake_args.av_recommand = lambda: None
 
-    fake_downloader = types.ModuleType('alos_downloader.sites')
+    fake_downloader = types.ModuleType('uav_downloader.sites')
     fake_downloader.consoles_main = (
         lambda url, output, max_workers=None:
         calls.append((url, output, max_workers)))
 
-    fake_gui = types.ModuleType('alos_downloader.apps.browse')
+    fake_gui = types.ModuleType('uav_downloader.apps.browse')
     fake_gui.gui_modern_main = lambda *_args: None
 
-    fake_crashlog = types.ModuleType('alos_downloader.core.crashlog')
+    fake_crashlog = types.ModuleType('uav_downloader.core.crashlog')
     fake_crashlog.install = lambda: None
 
-    monkeypatch.setitem(sys.modules, 'alos_downloader.cli.args', fake_args)
-    monkeypatch.setitem(sys.modules, 'alos_downloader.sites', fake_downloader)
+    monkeypatch.setitem(sys.modules, 'uav_downloader.cli.args', fake_args)
+    monkeypatch.setitem(sys.modules, 'uav_downloader.sites', fake_downloader)
     monkeypatch.setitem(
-        sys.modules, 'alos_downloader.apps.browse', fake_gui)
+        sys.modules, 'uav_downloader.apps.browse', fake_gui)
     monkeypatch.setitem(
-        sys.modules, 'alos_downloader.core.crashlog', fake_crashlog)
+        sys.modules, 'uav_downloader.core.crashlog', fake_crashlog)
     monkeypatch.setattr(cli, 'args', fake_args)
-    monkeypatch.setattr(alos_downloader, 'sites', fake_downloader)
+    monkeypatch.setattr(uav_downloader, 'sites', fake_downloader)
     monkeypatch.setattr(apps, 'browse', fake_gui)
     monkeypatch.setattr(core, 'crashlog', fake_crashlog, raising=False)
     monkeypatch.delenv('JABLE_WHISPER_DIAGNOSTIC_INPUT', raising=False)
@@ -95,7 +95,7 @@ def test_nogui_entrypoint_imports_downloader_and_forwards_output(
 
     with pytest.raises(SystemExit) as caught:
         runpy.run_path(
-            str(ROOT / 'src' / 'alos_downloader' / 'entrypoints' /
+            str(ROOT / 'src' / 'uav_downloader' / 'entrypoints' /
                 'browse.py'),
             run_name='__main__',
         )

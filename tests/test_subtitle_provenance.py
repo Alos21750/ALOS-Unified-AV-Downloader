@@ -1,11 +1,39 @@
+import json
 import shutil
 
-from alos_downloader.core import config
-from alos_downloader.subtitles import engine as subtitles
+from uav_downloader.core import config
+from uav_downloader.subtitles import engine as subtitles
 
 
 def _srt(text):
     return f'1\n00:00:00,000 --> 00:00:01,000\n{text}\n'
+
+
+def test_legacy_jable_provenance_is_read_as_managed_uav_state(tmp_path):
+    video = tmp_path / 'movie.mp4'
+    canonical = tmp_path / 'movie.uav-subtitles.json'
+    legacy = tmp_path / 'movie.jable-subtitles.json'
+    legacy.write_text(
+        json.dumps({
+            'schema': 1,
+            'kind': 'jable_subtitle_provenance',
+            'tracks': {
+                'ja': {
+                    'generator': 'jable',
+                    'srt_sha256': '0' * 64,
+                },
+            },
+        }),
+        encoding='utf-8',
+    )
+
+    loaded = subtitles._load_subtitle_provenance(
+        subtitles._subtitle_provenance_path(str(video)))
+
+    assert loaded['kind'] == 'uav_subtitle_provenance'
+    assert loaded['tracks']['ja']['generator'] == 'jable'
+    assert legacy.is_file()
+    assert not canonical.exists()
 
 
 def test_managed_asr_is_reused_until_downloaded_media_changes(
@@ -100,7 +128,7 @@ def test_corrupt_provenance_never_claims_or_overwrites_existing_srt(
         monkeypatch, tmp_path):
     video = tmp_path / 'movie.mp4'
     japanese = tmp_path / 'movie.ja.srt'
-    manifest = tmp_path / 'movie.jable-subtitles.json'
+    manifest = tmp_path / 'movie.uav-subtitles.json'
     video.write_bytes(b'video')
     japanese.write_text(_srt('User subtitle'), encoding='utf-8')
     manifest.write_text('{"tracks":', encoding='utf-8')

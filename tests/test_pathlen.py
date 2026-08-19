@@ -26,7 +26,7 @@ def _m3u8_stub():
 _stub_runtime_dependency('cloudscraper', _cloudscraper_stub)
 _stub_runtime_dependency('m3u8', _m3u8_stub)
 
-from alos_downloader.sites.base import M3U8Crawler, _truncate_target_name
+from uav_downloader.sites.base import M3U8Crawler, _truncate_target_name
 
 
 _TITLES = {}

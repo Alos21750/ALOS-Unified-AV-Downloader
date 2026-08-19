@@ -4,33 +4,37 @@
 
 ### 官方資產
 
-只從本專案的 [GitHub Releases](https://github.com/Alos21750/ALOS-Unified-AV-Downloader/releases) 下載。v3 Release 提供以下 canonical、可驗證資產：
+只從本專案的 [GitHub Releases](https://github.com/Alos21750/UAV-Downloader/releases) 下載。v3 Release 提供以下 canonical、可驗證資產：
 
-- `ALOS_Browse.exe`
-- `ALOS_Watch.exe`
-- `ALOS_Watch_portable.zip`：不使用 one-file 臨時自解壓流程的 ALOS Watch 備用版本
-- `ALOS_reazonspeech_asr_v1.zip`：預設「自動」字幕辨識首次使用時下載的 CPU 模型包
+- `UAV_Browser.exe`
+- `UAV_Watcher.exe`
+- `UAV_Watcher_portable.zip`：不使用 one-file 臨時自解壓流程的 UAV Watcher 備用版本
+- `UAV_reazonspeech_asr_v1.zip`：預設「自動」字幕辨識首次使用時下載的 CPU 模型包
+- `UAV_local_translation_v1.zip`：首次產生英文或繁中字幕時下載的本機翻譯模型包
 - `SHA256SUMS.txt`
 
-同一 Release 也會保留 v2 檔名作為舊更新器的相容別名。這些別名是 canonical 資產的位元完全相同副本，也各自列入 checksum 與 attestation；新下載請優先使用上列 ALOS 檔名。
+同一 Release 也會保留 ALOS v3.0 與 Jable v2 檔名，供已安裝的舊更新器相容使用。這些別名是 canonical 資產的位元完全相同副本，也各自列入 checksum 與 attestation；新下載請優先使用上列 UAV 檔名。
 
 先用 `SHA256SUMS.txt` 核對檔案雜湊：
 
 ```powershell
-Get-FileHash .\ALOS_Watch.exe -Algorithm SHA256
+Get-FileHash .\UAV_Watcher.exe -Algorithm SHA256
 ```
 
 若已安裝 GitHub CLI，也可驗證該 Release 資產是否由本專案的 GitHub Actions 產生：
 
 ```powershell
-gh attestation verify .\ALOS_Watch.exe `
-  -R Alos21750/ALOS-Unified-AV-Downloader
+gh attestation verify .\UAV_Watcher.exe `
+  -R Alos21750/UAV-Downloader
 
-gh attestation verify .\ALOS_Watch_portable.zip `
-  -R Alos21750/ALOS-Unified-AV-Downloader
+gh attestation verify .\UAV_Watcher_portable.zip `
+  -R Alos21750/UAV-Downloader
 
-gh attestation verify .\ALOS_reazonspeech_asr_v1.zip `
-  -R Alos21750/ALOS-Unified-AV-Downloader
+gh attestation verify .\UAV_reazonspeech_asr_v1.zip `
+  -R Alos21750/UAV-Downloader
+
+gh attestation verify .\UAV_local_translation_v1.zip `
+  -R Alos21750/UAV-Downloader
 ```
 
 雜湊只能證明檔案內容是否一致；GitHub attestation 只能證明建置來源。兩者都不等於防毒判定，也不能單獨證明程式安全。
@@ -65,33 +69,37 @@ gh attestation verify .\ALOS_reazonspeech_asr_v1.zip `
 
 ### Official assets
 
-Download only from this project's [GitHub Releases](https://github.com/Alos21750/ALOS-Unified-AV-Downloader/releases). v3 releases provide these canonical, verifiable assets:
+Download only from this project's [GitHub Releases](https://github.com/Alos21750/UAV-Downloader/releases). v3 releases provide these canonical, verifiable assets:
 
-- `ALOS_Browse.exe`
-- `ALOS_Watch.exe`
-- `ALOS_Watch_portable.zip`, an onedir fallback without one-file temporary extraction
-- `ALOS_reazonspeech_asr_v1.zip`, the CPU recognition pack downloaded on first use of the default Auto subtitle profile
+- `UAV_Browser.exe`
+- `UAV_Watcher.exe`
+- `UAV_Watcher_portable.zip`, an onedir fallback without one-file temporary extraction
+- `UAV_reazonspeech_asr_v1.zip`, the CPU recognition pack downloaded on first use of the default Auto subtitle profile
+- `UAV_local_translation_v1.zip`, the local translation models downloaded when English or Traditional Chinese subtitles are first requested
 - `SHA256SUMS.txt`
 
-The same release retains v2 filenames as compatibility aliases for installed update clients. Every alias is a byte-identical copy of its canonical asset and is listed separately in the checksums and attestations. New downloads should use the ALOS names above.
+The same release retains ALOS v3.0 and Jable v2 filenames as compatibility aliases for installed update clients. Every alias is a byte-identical copy of its canonical asset and is listed separately in the checksums and attestations. New downloads should use the UAV names above.
 
 Compare the downloaded file with `SHA256SUMS.txt`:
 
 ```powershell
-Get-FileHash .\ALOS_Watch.exe -Algorithm SHA256
+Get-FileHash .\UAV_Watcher.exe -Algorithm SHA256
 ```
 
 If GitHub CLI is installed, verify that the release asset was produced by this repository's GitHub Actions workflow:
 
 ```powershell
-gh attestation verify .\ALOS_Watch.exe `
-  -R Alos21750/ALOS-Unified-AV-Downloader
+gh attestation verify .\UAV_Watcher.exe `
+  -R Alos21750/UAV-Downloader
 
-gh attestation verify .\ALOS_Watch_portable.zip `
-  -R Alos21750/ALOS-Unified-AV-Downloader
+gh attestation verify .\UAV_Watcher_portable.zip `
+  -R Alos21750/UAV-Downloader
 
-gh attestation verify .\ALOS_reazonspeech_asr_v1.zip `
-  -R Alos21750/ALOS-Unified-AV-Downloader
+gh attestation verify .\UAV_reazonspeech_asr_v1.zip `
+  -R Alos21750/UAV-Downloader
+
+gh attestation verify .\UAV_local_translation_v1.zip `
+  -R Alos21750/UAV-Downloader
 ```
 
 A checksum proves byte identity. A GitHub attestation proves build provenance. Neither is an antivirus verdict or, by itself, proof that software is safe.

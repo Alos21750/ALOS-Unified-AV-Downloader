@@ -2,7 +2,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from alos_downloader.subtitles import engine as subtitles
+from uav_downloader.subtitles import engine as subtitles
 
 
 def test_model_download_fails_before_network_when_disk_is_too_small(

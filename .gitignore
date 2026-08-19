@@ -17,6 +17,7 @@ __pycache__/
 .venv/
 .Jable_smalltool/
 .alos-watch/
+.uav-watcher/
 
 # local maintenance guide (machine-specific paths — auto-loads locally, don't publish)
 CLAUDE.md

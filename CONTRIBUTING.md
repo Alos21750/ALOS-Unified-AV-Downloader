@@ -1,4 +1,4 @@
-# Contributing to ALOS Unified AV Downloader
+# Contributing to UAV Downloader
 
 Thank you for improving the project. Bug reports that include a reproducible
 URL and precise application version are especially valuable because supported
@@ -9,8 +9,8 @@ sites and CDNs can change independently of the application.
 Use Python 3.10 or newer; release builds use Python 3.12.10.
 
 ```bash
-git clone https://github.com/Alos21750/ALOS-Unified-AV-Downloader.git
-cd ALOS-Unified-AV-Downloader
+git clone https://github.com/Alos21750/UAV-Downloader.git
+cd UAV-Downloader
 python -m venv .venv
 .venv\Scripts\python -m pip install -r requirements.txt
 .venv\Scripts\python -m pip install -e .
@@ -23,7 +23,7 @@ is not bundled with Python.
 
 ## Pull requests
 
-- Keep site-specific parsing in `src/alos_downloader/sites`.
+- Keep site-specific parsing in `src/uav_downloader/sites`.
 - Put shared configuration, network, update, and migration behavior in `core`.
 - Add regression tests for crawler changes and user-visible bug fixes.
 - Preserve public CLI options, state migration, and v2 release aliases unless

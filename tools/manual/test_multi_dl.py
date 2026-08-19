@@ -18,8 +18,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from alos_downloader.apps.browse import DownloadManager  # noqa: E402
-from alos_downloader.sites.jabletv import JableTVBrowser  # noqa: E402
+from uav_downloader.apps.browse import DownloadManager  # noqa: E402
+from uav_downloader.sites.jabletv import JableTVBrowser  # noqa: E402
 
 
 def _fmt_bytes(n: int) -> str:

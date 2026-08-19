@@ -1,6 +1,6 @@
-# ALOS Headless: Docker and CLI
+# UAV Downloader CLI: Docker and CLI
 
-ALOS Headless downloads supported URLs without a desktop interface. It is a
+UAV Downloader CLI downloads supported URLs without a desktop interface. It is a
 run-to-completion job for Docker hosts, NAS systems, servers, and scripts.
 
 ## Docker
@@ -8,31 +8,32 @@ run-to-completion job for Docker hosts, NAS systems, servers, and scripts.
 The canonical multi-architecture image is:
 
 ```text
-ghcr.io/alos21750/alos-unified-av-downloader:latest
+ghcr.io/alos21750/uav-downloader:latest
 ```
 
-GitHub Actions publishes Linux amd64 and arm64 manifests. The legacy
-`ghcr.io/alos21750/jabletv` image name remains an exact compatibility channel.
+GitHub Actions publishes Linux amd64 and arm64 manifests. The former
+`ghcr.io/alos21750/alos-unified-av-downloader` and
+`ghcr.io/alos21750/jabletv` image names remain compatibility channels.
 
 Download one URL:
 
 ```bash
 docker run --rm \
   -v "/path/to/downloads:/downloads" \
-  ghcr.io/alos21750/alos-unified-av-downloader:latest \
+  ghcr.io/alos21750/uav-downloader:latest \
   "https://jable.tv/videos/example/"
 ```
 
 With Compose:
 
 ```bash
-docker compose run --rm alos "https://jable.tv/videos/example/"
+docker compose run --rm uav "https://jable.tv/videos/example/"
 ```
 
 To process a list, write one URL per line to `./downloads/urls.txt`, then run:
 
 ```bash
-docker compose run --rm alos
+docker compose run --rm uav
 ```
 
 Supported environment variables:
@@ -50,9 +51,9 @@ Supported environment variables:
 After an editable or package installation:
 
 ```bash
-alos-headless "https://jable.tv/videos/example/"
-alos-browse --nogui --url "https://jable.tv/videos/example/" -o ./download
+uav-downloader-cli "https://jable.tv/videos/example/"
+uav-browser --nogui --url "https://jable.tv/videos/example/" -o ./download
 ```
 
 The first command follows the Docker-style URL and environment interface. The
-second exposes the classic arguments shared with ALOS Browse.
+second exposes the classic arguments shared with UAV Browser.

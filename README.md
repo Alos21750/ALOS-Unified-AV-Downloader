@@ -2,62 +2,62 @@
   <strong>繁體中文</strong> · <a href="./README.zh-CN.md">简体中文</a> · <a href="./README.en.md">English</a> · <a href="./README.ja.md">日本語</a>
 </p>
 
-<h1 align="center">ALOS Unified AV Downloader</h1>
+<h1 align="center">UAV Downloader</h1>
 
 <p align="center">
   JableTV、MissAV、SupJav、Hanime1 的桌面下載器與自動監控工具，內建 <strong>AI 生成字幕</strong>。<br />
   <strong>下載完成，自動補上 AI 字幕：</strong>日語音軌在本機辨識，可輸出日文、英文與繁中 SRT。<br />
-  想自己瀏覽挑片，用 <strong>ALOS Browse</strong>；想依分類持續追新，用 <strong>ALOS Watch</strong>。<br />
+  想自己瀏覽挑片，用 <strong>UAV Browser</strong>；想依分類持續追新，用 <strong>UAV Watcher</strong>。<br />
   <strong>真正的核心是無人值守：</strong>選好分類與排程後，自動找新片、跨站去重、下載並補上字幕。
 </p>
 
 <p align="center">
-  <a href="https://github.com/Alos21750/ALOS-Unified-AV-Downloader/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/Alos21750/ALOS-Unified-AV-Downloader?style=flat-square&label=release&color=ff5263" /></a>
-  <a href="https://github.com/Alos21750/ALOS-Unified-AV-Downloader/releases"><img alt="Total downloads" src="https://img.shields.io/github/downloads/Alos21750/ALOS-Unified-AV-Downloader/total?style=flat-square&label=downloads&color=2ea44f" /></a>
-  <a href="https://github.com/Alos21750/ALOS-Unified-AV-Downloader"><img alt="GitHub stars" src="https://img.shields.io/github/stars/Alos21750/ALOS-Unified-AV-Downloader?style=flat-square&logo=github&color=f5b942" /></a>
-  <a href="./LICENSE"><img alt="Apache 2.0 license" src="https://img.shields.io/github/license/Alos21750/ALOS-Unified-AV-Downloader?style=flat-square" /></a>
-  <a href="https://github.com/Alos21750/ALOS-Unified-AV-Downloader/pkgs/container/alos-unified-av-downloader"><img alt="Docker amd64 and arm64" src="https://img.shields.io/badge/Docker-amd64%20%7C%20arm64-2496ed?style=flat-square&logo=docker&logoColor=white" /></a>
+  <a href="https://github.com/Alos21750/UAV-Downloader/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/Alos21750/UAV-Downloader?style=flat-square&label=release&color=ff5263" /></a>
+  <a href="https://github.com/Alos21750/UAV-Downloader/releases"><img alt="Total downloads" src="https://img.shields.io/github/downloads/Alos21750/UAV-Downloader/total?style=flat-square&label=downloads&color=2ea44f" /></a>
+  <a href="https://github.com/Alos21750/UAV-Downloader"><img alt="GitHub stars" src="https://img.shields.io/github/stars/Alos21750/UAV-Downloader?style=flat-square&logo=github&color=f5b942" /></a>
+  <a href="./LICENSE"><img alt="Apache 2.0 license" src="https://img.shields.io/github/license/Alos21750/UAV-Downloader?style=flat-square" /></a>
+  <a href="https://github.com/Alos21750/UAV-Downloader/pkgs/container/uav-downloader"><img alt="Docker amd64 and arm64" src="https://img.shields.io/badge/Docker-amd64%20%7C%20arm64-2496ed?style=flat-square&logo=docker&logoColor=white" /></a>
 </p>
 
 <p align="center">
-  <strong><a href="https://github.com/Alos21750/ALOS-Unified-AV-Downloader/releases/latest/download/ALOS_Browse.exe">下載 ALOS Browse</a></strong>
+  <strong><a href="https://github.com/Alos21750/UAV-Downloader/releases/latest/download/UAV_Browser.exe">下載 UAV Browser</a></strong>
   ·
-  <strong><a href="https://github.com/Alos21750/ALOS-Unified-AV-Downloader/releases/latest/download/ALOS_Watch.exe">下載 ALOS Watch</a></strong>
+  <strong><a href="https://github.com/Alos21750/UAV-Downloader/releases/latest/download/UAV_Watcher.exe">下載 UAV Watcher</a></strong>
   ·
-  <a href="https://github.com/Alos21750/ALOS-Unified-AV-Downloader/releases/latest">ALOS Watch portable ZIP（v3.0.0 起）</a>
+  <a href="https://github.com/Alos21750/UAV-Downloader/releases/latest">UAV Watcher portable ZIP（v3.1.0 起）</a>
   ·
-  <a href="https://github.com/Alos21750/ALOS-Unified-AV-Downloader/releases/latest">查看最新版本</a>
+  <a href="https://github.com/Alos21750/UAV-Downloader/releases/latest">查看最新版本</a>
 </p>
 
 > [!TIP]
-> **預設完全本地，不用 API Key，也不會上傳內容。** ALOS Browse 與 ALOS Watch 可在影片下載完成後，自動建立播放器可切換的 `.ja.srt`、`.en.srt`、`.zh-TW.srt`，且不修改 MP4。需要時也可自行接入常見 LLM API；雲端模式只會把辨識後的字幕文字作為影音內容送出，另含必要的 API 驗證與一般連線資訊，絕不傳送影片或音訊。
+> **預設完全本地，不用 API Key，也不會上傳內容。** UAV Browser 與 UAV Watcher 可在影片下載完成後，自動建立播放器可切換的 `.ja.srt`、`.en.srt`、`.zh-TW.srt`，且不修改 MP4。需要時也可自行接入常見 LLM API；雲端模式只會把辨識後的字幕文字作為影音內容送出，另含必要的 API 驗證與一般連線資訊，絕不傳送影片或音訊。
 
 <p align="center">
-  <img src="./docs/assets/alos-browse.png" width="100%" alt="ALOS Unified AV Downloader ALOS Browse v3.0.0 English dark interface with JableTV, MissAV and SupJav browse tabs" />
+  <img src="./docs/assets/uav-browser.png" width="100%" alt="UAV Downloader UAV Browser v3.1.0 English dark interface with JableTV, MissAV and SupJav browse tabs" />
 </p>
 
 ## 三種工作模式，一個下載核心
 
 | 需求 | 建議 | 操作方式 |
 |---|---|---|
-| 想瀏覽、搜尋、逐片挑選 | **ALOS_Browse.exe** | 看片卡、複選、加入佇列或直接下載 |
-| 想讓電腦無人值守自動追新 | **ALOS_Watch.exe** | 選網站、分類、日期、版本優先與排程；之後自動掃描、去重、下載與產生字幕 |
-| Defender 對 one-file ALOS Watch 發出偵測 | **ALOS_Watch_portable.zip** | 先核對雜湊與偵測資訊，再評估不需臨時自解壓的備用包；若備用包也被偵測，請停止並回報 |
+| 想瀏覽、搜尋、逐片挑選 | **UAV_Browser.exe** | 看片卡、複選、加入佇列或直接下載 |
+| 想讓電腦無人值守自動追新 | **UAV_Watcher.exe** | 選網站、分類、日期、版本優先與排程；之後自動掃描、去重、下載與產生字幕 |
+| Defender 對 one-file UAV Watcher 發出偵測 | **UAV_Watcher_portable.zip** | 先核對雜湊與偵測資訊，再評估不需臨時自解壓的備用包；若備用包也被偵測，請停止並回報 |
 | 想在 NAS／伺服器無介面執行 | **Docker / CLI** | 傳入一個或多個網址，或掛載 `urls.txt` |
 
-不確定時先下載 **ALOS Browse**。兩個 Windows 執行檔都免安裝 Python，Release 版本已包含 ffmpeg。
+不確定時先下載 **UAV Browser**。兩個 Windows 執行檔都免安裝 Python，Release 版本已包含 ffmpeg。
 
-深入了解：[ALOS Browse](./docs/alos-browse.md) · [ALOS Watch 無人值守流程](./docs/alos-watch.md) · [AI 字幕](./docs/ai-subtitles.md) · [Docker / CLI](./docs/docker-cli.md) · [v3 遷移](./docs/migration-v3.md)
+深入了解：[UAV Browser](./docs/uav-browser.md) · [UAV Watcher 無人值守流程](./docs/uav-watcher.md) · [AI 字幕](./docs/ai-subtitles.md) · [Docker / CLI](./docs/docker-cli.md) · [升級至 UAV](./docs/migration-to-uav.md)
 
 ## Windows：30 秒開始
 
-1. 下載 [ALOS_Browse.exe](https://github.com/Alos21750/ALOS-Unified-AV-Downloader/releases/latest/download/ALOS_Browse.exe) 或 [ALOS_Watch.exe](https://github.com/Alos21750/ALOS-Unified-AV-Downloader/releases/latest/download/ALOS_Watch.exe)。
+1. 下載 [UAV_Browser.exe](https://github.com/Alos21750/UAV-Downloader/releases/latest/download/UAV_Browser.exe) 或 [UAV_Watcher.exe](https://github.com/Alos21750/UAV-Downloader/releases/latest/download/UAV_Watcher.exe)。
 2. 把檔案放在可寫入的資料夾，直接雙擊執行。
 3. 首次開啟選擇語言；之後可隨時切換繁體中文、简体中文、English、日本語與明／暗主題。
 
 SmartScreen 信譽提醒與 Defender Antivirus 隔離是不同事件。請先閱讀 [Windows 下載與安全驗證](./WINDOWS_SECURITY.md)：核對 `SHA256SUMS.txt` 與 GitHub provenance；若 Defender 顯示 threat name，請勿直接降低防護設定。
 
-## ALOS Browse：瀏覽、挑選、下載
+## UAV Browser：瀏覽、挑選、下載
 
 1. 在「瀏覽」選 JableTV、MissAV、SupJav 或 Hanime1，再選分類或輸入關鍵字。
 2. 勾選多部影片後加入佇列，或直接下載選取項目。
@@ -75,10 +75,10 @@ SmartScreen 信譽提醒與 Defender Antivirus 隔離是不同事件。請先閱
 | Proxy | 可用自訂 HTTP、HTTPS、SOCKS4、SOCKS5，或跟隨 Windows 已啟用的手動 ProxyServer；不修改 Windows 全域代理 |
 | 更新 | 背景檢查 GitHub Release，有新版時由使用者確認後更新 |
 
-## ALOS Watch：依分類自動追新
+## UAV Watcher：依分類自動追新
 
 <p align="center">
-  <img src="./docs/assets/alos-watch.png" width="100%" alt="Jable ALOS Watch v3.0.0 Traditional Chinese dark interface showing MissAV categories, date, quality, version priority and AI subtitles" />
+  <img src="./docs/assets/uav-watcher.png" width="100%" alt="UAV Watcher v3.1.0 Traditional Chinese dark interface showing MissAV categories, date, quality, version priority and AI subtitles" />
 </p>
 
 1. 選擇儲存位置；若不選，會在執行檔旁自動建立 `tmp`。
@@ -94,9 +94,9 @@ SmartScreen 信譽提醒與 Defender Antivirus 隔離是不同事件。請先閱
 | SupJav | 10 | 動態／榜單與主要分類 |
 | Hanime1 | 24 | 上市／上傳／排行、9 種影片類型與中文字幕等特色標籤 |
 
-ALOS Watch 可設為每 1–168 小時自動檢查，或每天依這台電腦的本地時間在指定時刻檢查；舊設定仍預設每 24 小時。按「立即檢查」會立刻執行一次，不會另外建立重複排程。同一番號跨分類或跨網站重複時，會優先保留符合使用者版本偏好的候選；無法可靠辨識番號時只按完全相同網址去重，不猜測合併。
+UAV Watcher 可設為每 1–168 小時自動檢查，或每天依這台電腦的本地時間在指定時刻檢查；舊設定仍預設每 24 小時。按「立即檢查」會立刻執行一次，不會另外建立重複排程。同一番號跨分類或跨網站重複時，會優先保留符合使用者版本偏好的候選；無法可靠辨識番號時只按完全相同網址去重，不猜測合併。
 
-下載記錄優先存於執行檔旁的 `.alos-watch`；若該位置不可寫，會改用 `%APPDATA%\ALOS Unified AV Downloader\watch`。
+下載記錄優先存於執行檔旁的 `.uav-watcher`；若該位置不可寫，會改用 `%APPDATA%\UAV Downloader\watch`。
 
 ## AI 字幕：下載完成，自動補上日／英／繁中 SRT
 
@@ -109,12 +109,12 @@ ALOS Watch 可設為每 1–168 小時自動檢查，或每天依這台電腦的
 - 可選的 API 擴充支援 **OpenAI、Anthropic、Gemini** 與 **OpenAI-compatible** API；後者可連接 DeepSeek、OpenRouter、Groq、Ollama、LiteLLM 等相容服務。影音內容中只有辨識後的字幕文字會送到所選服務；API 驗證與一般連線資訊也會正常送出，但影片與音訊始終留在本機。
 - 使用者自行提供的 API Key 會透過 Windows DPAPI，以目前登入的 Windows 帳號加密保存；專案與 EXE 不附帶任何 API Key。各服務的費用、額度、資料處理與使用政策由該供應商決定，使用前請自行確認。
 - 本地翻譯會逐一保留每個 cue 與原時間軸，套用 900 多組人工撰寫與審核的成人語境、安全／同意、拍攝隱私、現場指示與日常短句，並使用保守的台灣用語校正及版本化 exact-match 翻譯記憶；不做容易反轉「停／不要停」語意的模糊比對。
-- ALOS Browse 的影片下載與字幕處理使用獨立佇列；字幕逐部在背景產生，不會占用 1–32 個影片下載名額。
+- UAV Browser 的影片下載與字幕處理使用獨立佇列；字幕逐部在背景產生，不會占用 1–32 個影片下載名額。
 - 產生速度取決於 CPU、影片長度、實際語音比例與所選翻譯服務；三語共用同一次本機語音辨識。本地模式也會重用中間翻譯結果，避免重複推論。
 
 ## 支援範圍
 
-| 網站 | ALOS Browse 瀏覽／搜尋／下載 | ALOS Watch 分類監控 | Docker／CLI 網址下載 |
+| 網站 | UAV Browser 瀏覽／搜尋／下載 | UAV Watcher 分類監控 | Docker／CLI 網址下載 |
 |---|:---:|:---:|:---:|
 | JableTV | ✓ | ✓ | ✓ |
 | MissAV | ✓ | ✓ | ✓ |
@@ -130,19 +130,19 @@ Hanime1 支援官方 `watch?v=` 網址、站內搜尋、分頁、排序、類型
 需要 **Python 3.10+** 與 Tk。舊 README 的 Python 3.8+ 已不符合目前原始碼語法需求。
 
 ```bash
-git clone https://github.com/Alos21750/ALOS-Unified-AV-Downloader.git
-cd ALOS-Unified-AV-Downloader
+git clone https://github.com/Alos21750/UAV-Downloader.git
+cd UAV-Downloader
 python -m pip install -r requirements.txt
 python -m pip install -e .
 
 # 完整 GUI
-alos-browse
+uav-browser
 
 # 自動監控工具
-alos-watch
+uav-watcher
 
 # 單一網址、無 GUI，並指定下載位置與每片 3 個下載執行緒
-alos-browse --nogui --url "https://jable.tv/videos/example/" --output "/path/to/downloads" --max-workers-per-video 3
+uav-browser --nogui --url "https://jable.tv/videos/example/" --output "/path/to/downloads" --max-workers-per-video 3
 ```
 
 `-o` 是 `--output` 的縮寫；若省略，預設會儲存在 `./download`。`--max-workers-per-video` 接受 1–16，可在 Proxy 負載較高時調低。
@@ -151,18 +151,18 @@ Linux 若未內建 Tk，請先用系統套件管理器安裝 `python3-tk`。macO
 
 ## Docker / NAS
 
-公開映像為 `ghcr.io/alos21750/alos-unified-av-downloader:latest`，GitHub Actions 會建置 amd64 與 arm64。
+公開映像為 `ghcr.io/alos21750/uav-downloader:latest`，GitHub Actions 會建置 amd64 與 arm64。
 
 ```bash
 # 下載單一網址；把主機資料夾掛載到 /downloads
 docker run --rm -v "/path/to/downloads:/downloads" \
-  ghcr.io/alos21750/alos-unified-av-downloader:latest "https://jable.tv/videos/example/"
+  ghcr.io/alos21750/uav-downloader:latest "https://jable.tv/videos/example/"
 
 # docker compose：直接傳網址
-docker compose run --rm alos "https://jable.tv/videos/example/"
+docker compose run --rm uav "https://jable.tv/videos/example/"
 
 # 或把網址逐行放進 ./downloads/urls.txt
-docker compose run --rm alos
+docker compose run --rm uav
 ```
 
 可用環境變數：
@@ -175,23 +175,23 @@ docker compose run --rm alos
 | `URLS_FILE` | 網址清單；預設 `/downloads/urls.txt` |
 | `DOWNLOAD_DIR` | 容器內儲存位置；預設 `/downloads` |
 
-Docker 是無介面、執行完即結束的下載工作，不包含 ALOS Browse 或 ALOS Watch GUI。
+Docker 是無介面、執行完即結束的下載工作，不包含 UAV Browser 或 UAV Watcher GUI。
 
 ## 遇到問題
 
-開 [GitHub Issue](https://github.com/Alos21750/ALOS-Unified-AV-Downloader/issues/new) 時，請提供：
+開 [GitHub Issue](https://github.com/Alos21750/UAV-Downloader/issues/new) 時，請提供：
 
 - App 版本、使用的工具與作業系統。
 - 網站與可重現網址，以及預期／實際結果。
 - 若程式閃退，附上執行檔旁的 `crash_log.txt` 或 `crash_native.log`。
 - 不要上傳 Cookie、Proxy 帳密、Token 或其他私密值。
 
-需要 Proxy 時，可在 ALOS Browse「設定」或 ALOS Watch 頂部選擇自訂代理、Windows 系統代理或停用。兩個 GUI 共用設定，且只作用於本程式；Windows 模式目前支援已啟用的手動 ProxyServer。PAC 設定網址會提示但不執行，WPAD 自動偵測尚未支援。
+需要 Proxy 時，可在 UAV Browser「設定」或 UAV Watcher 頂部選擇自訂代理、Windows 系統代理或停用。兩個 GUI 共用設定，且只作用於本程式；Windows 模式目前支援已啟用的手動 ProxyServer。PAC 設定網址會提示但不執行，WPAD 自動偵測尚未支援。
 
 ## Stars 與專案活動
 
 <p align="center">
-  <img src="./docs/assets/star-history.svg" width="100%" alt="Verified GitHub star history for ALOS Unified AV Downloader" />
+  <img src="./docs/assets/star-history.svg" width="100%" alt="Verified GitHub star history for UAV Downloader" />
 </p>
 
 圖表由本 repo 的 GitHub Actions 使用唯讀 repository token 取得目前 stargazers 的 `starredAt` 時間後產生；不請求或輸出帳號名稱。只有資料或圖表格式改變時才更新。曲線反映「目前仍按 Star 的帳號」之加入日期，已取消 Star 的帳號不在資料中。
@@ -207,6 +207,6 @@ GitHub 在 2026 年 7 月限制 stargazer 清單存取，舊的匿名 Star Histo
 
 程式碼採 [Apache License 2.0](./LICENSE)。本工具僅供合法的個人與研究用途；請遵守所在地法律、網站條款與內容權利，只下載你有權取得的內容。
 
-版本變更與已修復問題請看 [Releases](https://github.com/Alos21750/ALOS-Unified-AV-Downloader/releases)。
+版本變更與已修復問題請看 [Releases](https://github.com/Alos21750/UAV-Downloader/releases)。
 
 <p align="center">Built and maintained by <a href="https://github.com/Alos21750">ALOS</a>.</p>

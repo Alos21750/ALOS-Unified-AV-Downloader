@@ -2,9 +2,9 @@
 
 ## Optional local Japanese speech-recognition pack
 
-The optional `ALOS_reazonspeech_asr_v1.zip` archive is a mixed-license,
+The optional `UAV_reazonspeech_asr_v1.zip` archive is a mixed-license,
 CPU-only Japanese speech-recognition pack. It contains only the pinned model
-and Windows runtime files used by Jable:
+and Windows runtime files used by UAV Downloader:
 
 | Component | Immutable source revision | License |
 | --- | --- | --- |
@@ -42,7 +42,7 @@ model-card terms.
 
 ## Optional local subtitle-translation model pack
 
-The optional `Jable_local_translation_v1.zip` archive contains converted,
+The optional `UAV_local_translation_v1.zip` archive contains converted,
 quantized copies of the following third-party model checkpoints:
 
 | Component | Immutable source revision | License |

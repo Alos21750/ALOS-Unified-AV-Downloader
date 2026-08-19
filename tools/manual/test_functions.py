@@ -28,16 +28,16 @@ def _check(label: str, cond, detail: str = ''):
 # ── Test 1: module imports ────────────────────────────────────────
 print('\n[1] Module imports')
 try:
-    from alos_downloader.apps import browse as gui_modern
-    from alos_downloader.apps.browse import (
+    from uav_downloader.apps import browse as gui_modern
+    from uav_downloader.apps.browse import (
         DownloadManager, DownloadItem, fetch_page_data,
         _fetch_thumbnail, _get_thumb_session,
         DEFAULT_CONCURRENT, MAX_CONCURRENT, SITES, CSV_PATH,
     )
-    from alos_downloader import sites as M3U8Sites
-    from alos_downloader.sites.jabletv import JableTVBrowser
-    from alos_downloader.sites.missav import MissAVBrowser
-    from alos_downloader.sites.base import speed_limiter
+    from uav_downloader import sites as M3U8Sites
+    from uav_downloader.sites.jabletv import JableTVBrowser
+    from uav_downloader.sites.missav import MissAVBrowser
+    from uav_downloader.sites.base import speed_limiter
     _check('imports ok', True)
 except Exception as e:
     _check('imports ok', False, str(e))

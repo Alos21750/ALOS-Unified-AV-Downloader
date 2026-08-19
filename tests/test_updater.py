@@ -1,7 +1,7 @@
 # coding: utf-8
 """Auto-updater tests: version compare (drives whether users are offered updates) and
 download_asset validation (size floor + MZ-header check + atomic replace)."""
-from alos_downloader.core import updater
+from uav_downloader.core import updater
 
 
 def test_parse_version():
@@ -23,22 +23,29 @@ def test_is_newer_is_numeric_not_lexical():
     assert updater.is_newer('v2.6.0', '2.5.99') is True
 
 
-def test_v3_updater_prefers_canonical_asset_and_accepts_v2_alias():
+def test_updater_prefers_uav_asset_and_accepts_transition_aliases():
     canonical = {
         'assets': {
+            'UAV_Browser.exe': 'https://example.invalid/uav.exe',
             'ALOS_Browse.exe': 'https://example.invalid/alos.exe',
-            'JableTV_Modern.exe': 'https://example.invalid/legacy.exe',
+            'JableTV_Modern.exe': 'https://example.invalid/jable.exe',
         },
     }
-    legacy_only = {
+    alos_only = {
         'assets': {
-            'JableTV_Modern.exe': 'https://example.invalid/legacy.exe',
+            'ALOS_Browse.exe': 'https://example.invalid/alos.exe',
+            'JableTV_Modern.exe': 'https://example.invalid/jable.exe',
+        },
+    }
+    jable_only = {
+        'assets': {
+            'JableTV_Modern.exe': 'https://example.invalid/jable.exe',
         },
     }
 
-    assert updater.find_asset_url(canonical, 'browse').endswith('/alos.exe')
-    assert updater.find_asset_url(legacy_only, 'browse').endswith(
-        '/legacy.exe')
+    assert updater.find_asset_url(canonical, 'browse').endswith('/uav.exe')
+    assert updater.find_asset_url(alos_only, 'browse').endswith('/alos.exe')
+    assert updater.find_asset_url(jable_only, 'browse').endswith('/jable.exe')
 
 
 class _FakeResp:

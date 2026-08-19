@@ -20,16 +20,16 @@ _stub_runtime_dependency('m3u8', _m3u8_stub)
 
 from bs4 import BeautifulSoup
 
-from alos_downloader import sites as M3U8Sites
-from alos_downloader.sites import hanime1 as hanime_mod
-from alos_downloader.sites.hanime1 import (
+from uav_downloader import sites as M3U8Sites
+from uav_downloader.sites import hanime1 as hanime_mod
+from uav_downloader.sites.hanime1 import (
     Hanime1Browser,
     SiteHanime1,
     _extract_sources,
     _parse_videos,
     _select_source,
 )
-from alos_downloader.core.video_identity import site_from_url, trusted_chinese_subtitle_evidence
+from uav_downloader.core.video_identity import site_from_url, trusted_chinese_subtitle_evidence
 
 
 WATCH_HTML = '''
@@ -176,9 +176,9 @@ def test_hanime1_is_registered_for_cli_and_gui_site_creation(monkeypatch):
 
 
 def test_hanime1_is_exposed_by_every_desktop_browser_and_listing_detection():
-    from alos_downloader.legacy.browser import BrowsePanel
-    from alos_downloader.apps.browse import ModernApp, SITES as MODERN_SITES
-    from alos_downloader.apps.watch_categories import SITES as SMALLTOOL_SITES
+    from uav_downloader.legacy.browser import BrowsePanel
+    from uav_downloader.apps.browse import ModernApp, SITES as MODERN_SITES
+    from uav_downloader.apps.watch_categories import SITES as SMALLTOOL_SITES
 
     assert MODERN_SITES['Hanime1']['browser'] is Hanime1Browser
     assert SMALLTOOL_SITES['Hanime1']['browser'] is Hanime1Browser
@@ -209,7 +209,7 @@ def test_hanime1_identity_and_chinese_subtitle_listing_evidence_are_fail_closed(
 
 
 def test_hanime1_all_browse_categories_have_four_language_labels():
-    from alos_downloader.i18n import sites as site_i18n
+    from uav_downloader.i18n import sites as site_i18n
 
     assert len(Hanime1Browser.CATEGORIES) == 24
     for _name, url in Hanime1Browser.CATEGORIES:

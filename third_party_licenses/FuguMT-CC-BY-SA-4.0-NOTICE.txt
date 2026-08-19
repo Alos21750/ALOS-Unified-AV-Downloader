@@ -19,7 +19,7 @@ License:
   https://creativecommons.org/licenses/by-sa/4.0/
   https://creativecommons.org/licenses/by-sa/4.0/legalcode
 
-Changes made for JableTV Downloader:
+Changes made for UAV Downloader:
   - Converted the pinned Transformers/Marian checkpoint to the CTranslate2
     model format.
   - Quantized model weights to INT8.

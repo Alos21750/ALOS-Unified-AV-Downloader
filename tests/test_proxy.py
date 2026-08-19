@@ -3,8 +3,8 @@ import json
 import pytest
 import requests
 
-from alos_downloader.core import config
-from alos_downloader.sites import base as crawler
+from uav_downloader.core import config
+from uav_downloader.sites import base as crawler
 
 
 @pytest.mark.parametrize(

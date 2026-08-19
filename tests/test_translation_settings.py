@@ -3,7 +3,7 @@ import os
 
 import pytest
 
-from alos_downloader.subtitles import settings
+from uav_downloader.subtitles import settings
 
 
 @pytest.fixture
@@ -11,6 +11,8 @@ def isolated_settings(monkeypatch, tmp_path):
     path = tmp_path / "translation_api.json"
     monkeypatch.setattr(settings, "_settings_path", lambda: str(path))
     for name in (
+        "UAV_TRANSLATION_API_KEY",
+        "ALOS_TRANSLATION_API_KEY",
         "JABLE_TRANSLATION_API_KEY",
         "OPENAI_API_KEY",
         "ANTHROPIC_API_KEY",
@@ -117,7 +119,7 @@ def test_environment_key_overrides_protected_or_missing_key(
         base_url="https://example.test/v1",
         model="custom-model",
     )
-    monkeypatch.setenv("JABLE_TRANSLATION_API_KEY", "environment-secret")
+    monkeypatch.setenv("UAV_TRANSLATION_API_KEY", "environment-secret")
 
     loaded = settings.get_translation_settings()
 
@@ -125,6 +127,25 @@ def test_environment_key_overrides_protected_or_missing_key(
     assert loaded.api_key_source == "environment"
     assert "environment-secret" not in isolated_settings.read_text(
         encoding="utf-8")
+
+
+@pytest.mark.parametrize(
+    "name",
+    ("ALOS_TRANSLATION_API_KEY", "JABLE_TRANSLATION_API_KEY"),
+)
+def test_legacy_environment_key_aliases_remain_supported(
+        isolated_settings, monkeypatch, name):
+    settings.save_translation_profile(
+        settings.OPENAI_COMPATIBLE,
+        base_url="https://example.test/v1",
+        model="custom-model",
+    )
+    monkeypatch.setenv(name, "legacy-environment-secret")
+
+    loaded = settings.get_translation_settings()
+
+    assert loaded.api_key == "legacy-environment-secret"
+    assert loaded.api_key_source == "environment"
 
 
 def test_settings_repr_and_comparison_never_expose_or_depend_on_secret():
@@ -266,7 +287,7 @@ def test_hand_edited_official_host_falls_back_to_the_official_url(
 def test_local_provider_never_loads_generic_environment_credential(
         isolated_settings, monkeypatch):
     monkeypatch.setenv(
-        "JABLE_TRANSLATION_API_KEY",
+        "UAV_TRANSLATION_API_KEY",
         "must-not-be-loaded-while-local")
 
     loaded = settings.get_translation_settings()

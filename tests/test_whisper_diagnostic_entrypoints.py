@@ -7,36 +7,36 @@ from pathlib import Path
 
 import pytest
 
-from alos_downloader import core, subtitles
+from uav_downloader import core, subtitles
 
 
 ROOT = Path(__file__).resolve().parent.parent
 ENTRY_POINTS = ('browse.py', 'watch.py')
-ENTRYPOINT_ROOT = ROOT / 'src' / 'alos_downloader' / 'entrypoints'
+ENTRYPOINT_ROOT = ROOT / 'src' / 'uav_downloader' / 'entrypoints'
 GUI_IMPORT_PREFIXES = {
-    'alos_downloader.apps',
-    'alos_downloader.i18n',
-    'alos_downloader.legacy',
-    'alos_downloader.sites',
-    'alos_downloader.ui',
+    'uav_downloader.apps',
+    'uav_downloader.i18n',
+    'uav_downloader.legacy',
+    'uav_downloader.sites',
+    'uav_downloader.ui',
     'customtkinter',
     'tkinter',
 }
 
 
 def _install_safe_modules(monkeypatch, diagnostic):
-    fake_engine = types.ModuleType('alos_downloader.subtitles.engine')
+    fake_engine = types.ModuleType('uav_downloader.subtitles.engine')
     fake_engine.run_whisper_diagnostic = diagnostic
     fake_engine.run_local_translation_diagnostic = lambda _output: None
     fake_engine.run_local_translation_worker_soak_diagnostic = (
         lambda _output: None)
     fake_engine.run_llm_translation_diagnostic = lambda _output: None
-    fake_crashlog = types.ModuleType('alos_downloader.core.crashlog')
+    fake_crashlog = types.ModuleType('uav_downloader.core.crashlog')
     fake_crashlog.install = lambda: None
     monkeypatch.setitem(
-        sys.modules, 'alos_downloader.subtitles.engine', fake_engine)
+        sys.modules, 'uav_downloader.subtitles.engine', fake_engine)
     monkeypatch.setitem(
-        sys.modules, 'alos_downloader.core.crashlog', fake_crashlog)
+        sys.modules, 'uav_downloader.core.crashlog', fake_crashlog)
     monkeypatch.setattr(subtitles, 'engine', fake_engine, raising=False)
     monkeypatch.setattr(core, 'crashlog', fake_crashlog, raising=False)
 
@@ -79,7 +79,7 @@ def test_whisper_diagnostic_runs_before_gui_import(
         calls.append((input_path, output_path))
         Path(output_path).write_text(
             json.dumps({
-                'kind': 'jable_whisper_diagnostic',
+                'kind': 'uav_whisper_diagnostic',
                 'schema': 1,
                 'cue_count': 2,
                 'transcript_sha256': '0' * 64,
@@ -214,7 +214,7 @@ def test_translation_diagnostic_failure_is_silent_and_cannot_reuse_stale_report(
     report.write_text('{"kind":"stale"}', encoding='utf-8')
 
     _install_safe_modules(monkeypatch, lambda *_args: None)
-    fake_engine = sys.modules['alos_downloader.subtitles.engine']
+    fake_engine = sys.modules['uav_downloader.subtitles.engine']
 
     def fail_without_writing(_output_path):
         raise RuntimeError('secret provider key and private response')

@@ -39,9 +39,9 @@ _stub_runtime_dependency('cloudscraper', _cloudscraper_stub)
 _stub_runtime_dependency('m3u8', _m3u8_stub)
 _stub_runtime_dependency('customtkinter', _customtkinter_stub)
 
-from alos_downloader.core import config
-from alos_downloader.apps import browse as gui_modern
-from alos_downloader.apps.browse import (
+from uav_downloader.core import config
+from uav_downloader.apps import browse as gui_modern
+from uav_downloader.apps.browse import (
     DownloadItem,
     DownloadManager,
     _download_row_action,
@@ -58,7 +58,7 @@ def test_queue_csv_path_uses_appdata_download_queue(monkeypatch, tmp_path):
     monkeypatch.setenv('APPDATA', str(tmp_path))
 
     assert config.queue_csv_path() == os.path.join(
-        str(tmp_path), 'ALOS Unified AV Downloader', 'download_queue.csv')
+        str(tmp_path), 'UAV Downloader', 'download_queue.csv')
 
 
 def test_download_queue_csv_round_trip_preserves_destination(tmp_path):

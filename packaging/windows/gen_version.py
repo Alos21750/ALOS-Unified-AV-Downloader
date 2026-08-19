@@ -4,7 +4,7 @@
 from pathlib import Path
 
 
-VERSION = (3, 0, 0, 0)
+VERSION = (3, 1, 0, 0)
 HERE = Path(__file__).resolve().parent
 
 
@@ -30,7 +30,7 @@ VSVersionInfo(
         StringStruct('FileVersion', '{dotted}'),
         StringStruct('InternalName', '{internal_name}'),
         StringStruct('OriginalFilename', '{original_filename}'),
-        StringStruct('ProductName', 'ALOS Unified AV Downloader'),
+        StringStruct('ProductName', 'UAV Downloader'),
         StringStruct('ProductVersion', '{dotted}')
       ])
     ]),
@@ -41,12 +41,12 @@ VSVersionInfo(
 
 
 FILES = (
-    ('ALOS_Browse.version', 'ALOS_Browse',
-     'ALOS Browse - Interactive AV Video Downloader',
-     'ALOS_Browse.exe'),
-    ('ALOS_Watch.version', 'ALOS_Watch',
-     'ALOS Watch - Unattended New Release Downloader',
-     'ALOS_Watch.exe'),
+    ('UAV_Browser.version', 'UAV_Browser',
+     'UAV Browser - Interactive AV Video Downloader',
+     'UAV_Browser.exe'),
+    ('UAV_Watcher.version', 'UAV_Watcher',
+     'UAV Watcher - Unattended New Release Downloader',
+     'UAV_Watcher.exe'),
 )
 
 for path_name, internal_name, description, original_filename in FILES:

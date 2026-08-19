@@ -126,7 +126,7 @@ jobs:
             Move-Item -LiteralPath $partial -Destination $Destination
           }
 
-          $root = Join-Path $env:RUNNER_TEMP "alos-reazonspeech-asr-v1"
+          $root = Join-Path $env:RUNNER_TEMP "uav-reazonspeech-asr-v1"
           New-Item -ItemType Directory -Path $root | Out-Null
           $archive = Join-Path $root `
             "sherpa-onnx-v1.13.4-win-x64-shared-MT-MinSizeRel-no-tts.tar.bz2"
@@ -197,7 +197,7 @@ jobs:
 
           New-Item -ItemType Directory -Force -Path dist | Out-Null
           $pack = Join-Path (Resolve-Path "dist") `
-            "ALOS_reazonspeech_asr_v1.zip"
+            "UAV_reazonspeech_asr_v1.zip"
           $resultText = & python scripts/build_reazonspeech_asr_pack.py `
             --runtime-dir $runtimeDir `
             --model-dir $modelDir `
@@ -223,36 +223,59 @@ jobs:
             186186197 `
             "cf55e5485e14715beee6e0b12ca2b0998ad73ec755513e80138fa5161693c700"
 
-      - name: Build ALOS Browse and ALOS Watch
+          # Promote the exact previously qualified local-translation pack
+          # under its canonical UAV filename. Its immutable model revisions
+          # and licenses are documented in THIRD_PARTY_NOTICES.md.
+          $translationPack = Join-Path (Resolve-Path "dist") `
+            "UAV_local_translation_v1.zip"
+          Get-PinnedFile `
+            "https://github.com/Alos21750/UAV-Downloader/releases/download/v2.5.34/Jable_local_translation_v1.zip" `
+            $translationPack `
+            147330565 `
+            "1259a2abeb5026411da39c6f3dcd69ebd70bed654ac9cfaaee0c7373867c0bb4"
+
+      - name: Build UAV Browser and UAV Watcher
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path dist, build | Out-Null
           Push-Location packaging\windows
-          python -m PyInstaller --noconfirm --clean --distpath ..\..\dist --workpath ..\..\build ALOS_Browse.spec
-          python -m PyInstaller --noconfirm --clean --distpath ..\..\dist --workpath ..\..\build\watch-onefile ALOS_Watch.spec
-          python -m PyInstaller --noconfirm --clean --distpath ..\..\dist --workpath ..\..\build\watch-portable ALOS_Watch.spec -- --portable
+          python -m PyInstaller --noconfirm --clean --distpath ..\..\dist --workpath ..\..\build UAV_Browser.spec
+          python -m PyInstaller --noconfirm --clean --distpath ..\..\dist --workpath ..\..\build\watch-onefile UAV_Watcher.spec
+          python -m PyInstaller --noconfirm --clean --distpath ..\..\dist --workpath ..\..\build\watch-portable UAV_Watcher.spec -- --portable
           Pop-Location
           Compress-Archive `
-            -Path "dist\ALOS_Watch_portable" `
-            -DestinationPath "dist\ALOS_Watch_portable.zip" `
+            -Path "dist\UAV_Watcher_portable" `
+            -DestinationPath "dist\UAV_Watcher_portable.zip" `
             -CompressionLevel Optimal
 
-          # v2 clients resolve these exact names. Each compatibility asset is
-          # a byte-for-byte alias of its canonical v3 counterpart.
-          Copy-Item -LiteralPath "dist\ALOS_Browse.exe" `
+          # v2 and v3.0 clients resolve these exact names. Each compatibility
+          # asset is a byte-for-byte alias of its canonical UAV counterpart.
+          Copy-Item -LiteralPath "dist\UAV_Browser.exe" `
+            -Destination "dist\ALOS_Browse.exe"
+          Copy-Item -LiteralPath "dist\UAV_Watcher.exe" `
+            -Destination "dist\ALOS_Watch.exe"
+          Copy-Item -LiteralPath "dist\UAV_Watcher_portable.zip" `
+            -Destination "dist\ALOS_Watch_portable.zip"
+          Copy-Item -LiteralPath "dist\UAV_reazonspeech_asr_v1.zip" `
+            -Destination "dist\ALOS_reazonspeech_asr_v1.zip"
+          Copy-Item -LiteralPath "dist\UAV_Browser.exe" `
             -Destination "dist\JableTV_Modern.exe"
-          Copy-Item -LiteralPath "dist\ALOS_Watch.exe" `
+          Copy-Item -LiteralPath "dist\UAV_Watcher.exe" `
             -Destination "dist\Jable_smalltool.exe"
-          Copy-Item -LiteralPath "dist\ALOS_Watch_portable.zip" `
+          Copy-Item -LiteralPath "dist\UAV_Watcher_portable.zip" `
             -Destination "dist\Jable_smalltool_portable.zip"
-          Copy-Item -LiteralPath "dist\ALOS_reazonspeech_asr_v1.zip" `
+          Copy-Item -LiteralPath "dist\UAV_reazonspeech_asr_v1.zip" `
             -Destination "dist\Jable_reazonspeech_asr_v1.zip"
 
           $aliasPairs = @(
-            @("ALOS_Browse.exe", "JableTV_Modern.exe"),
-            @("ALOS_Watch.exe", "Jable_smalltool.exe"),
-            @("ALOS_Watch_portable.zip", "Jable_smalltool_portable.zip"),
-            @("ALOS_reazonspeech_asr_v1.zip", "Jable_reazonspeech_asr_v1.zip")
+            @("UAV_Browser.exe", "ALOS_Browse.exe"),
+            @("UAV_Watcher.exe", "ALOS_Watch.exe"),
+            @("UAV_Watcher_portable.zip", "ALOS_Watch_portable.zip"),
+            @("UAV_reazonspeech_asr_v1.zip", "ALOS_reazonspeech_asr_v1.zip"),
+            @("UAV_Browser.exe", "JableTV_Modern.exe"),
+            @("UAV_Watcher.exe", "Jable_smalltool.exe"),
+            @("UAV_Watcher_portable.zip", "Jable_smalltool_portable.zip"),
+            @("UAV_reazonspeech_asr_v1.zip", "Jable_reazonspeech_asr_v1.zip")
           )
           foreach ($pair in $aliasPairs) {
             $canonicalHash = (
@@ -267,6 +290,11 @@ jobs:
           }
 
           $assetNames = @(
+            "UAV_Browser.exe",
+            "UAV_Watcher.exe",
+            "UAV_Watcher_portable.zip",
+            "UAV_reazonspeech_asr_v1.zip",
+            "UAV_local_translation_v1.zip",
             "ALOS_Browse.exe",
             "ALOS_Watch.exe",
             "ALOS_Watch_portable.zip",
@@ -289,11 +317,13 @@ jobs:
       - name: Verify executable metadata
         shell: pwsh
         run: |
-          $expected = "3.0.0.0"
+          $expected = "3.1.0.0"
           $files = @(
+            "dist\UAV_Browser.exe",
+            "dist\UAV_Watcher.exe",
+            "dist\UAV_Watcher_portable\UAV_Watcher.exe",
             "dist\ALOS_Browse.exe",
             "dist\ALOS_Watch.exe",
-            "dist\ALOS_Watch_portable\ALOS_Watch.exe",
             "dist\JableTV_Modern.exe",
             "dist\Jable_smalltool.exe"
           )
@@ -304,6 +334,9 @@ jobs:
             Write-Host "$file $version $((Get-Item -LiteralPath $file).Length) bytes"
           }
           foreach ($file in @(
+            "dist\UAV_Watcher_portable.zip",
+            "dist\UAV_reazonspeech_asr_v1.zip",
+            "dist\UAV_local_translation_v1.zip",
             "dist\ALOS_Watch_portable.zip",
             "dist\ALOS_reazonspeech_asr_v1.zip",
             "dist\Jable_smalltool_portable.zip",
@@ -317,6 +350,11 @@ jobs:
         uses: actions/attest@v4
         with:
           subject-path: |
+            dist/UAV_Browser.exe
+            dist/UAV_Watcher.exe
+            dist/UAV_Watcher_portable.zip
+            dist/UAV_reazonspeech_asr_v1.zip
+            dist/UAV_local_translation_v1.zip
             dist/ALOS_Browse.exe
             dist/ALOS_Watch.exe
             dist/ALOS_Watch_portable.zip
@@ -330,8 +368,13 @@ jobs:
       - name: Upload Windows executables
         uses: actions/upload-artifact@v4
         with:
-          name: alos-unified-windows-${{ github.sha }}
+          name: uav-windows-${{ github.sha }}
           path: |
+            dist/UAV_Browser.exe
+            dist/UAV_Watcher.exe
+            dist/UAV_Watcher_portable.zip
+            dist/UAV_reazonspeech_asr_v1.zip
+            dist/UAV_local_translation_v1.zip
             dist/ALOS_Browse.exe
             dist/ALOS_Watch.exe
             dist/ALOS_Watch_portable.zip

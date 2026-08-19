@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # coding: utf-8
-"""Capture ALOS Browse and ALOS Watch for the GitHub READMEs.
+"""Capture UAV Browser and UAV Watcher for the GitHub READMEs.
 
 The script keeps the user's saved preferences and download queue untouched. The
 Browse screenshot uses a live JableTV page; the Watch screenshot is
@@ -33,10 +33,10 @@ ctk.deactivate_automatic_dpi_awareness()
 ctk.set_widget_scaling(1.0)
 ctk.set_window_scaling(1.0)
 
-from alos_downloader.core import config  # noqa: E402
-from alos_downloader.apps import browse as browse_app  # noqa: E402
-from alos_downloader.apps import watch as watch_app  # noqa: E402
-from alos_downloader.apps.watch_categories import find_target, selection_key  # noqa: E402
+from uav_downloader.core import config  # noqa: E402
+from uav_downloader.apps import browse as browse_app  # noqa: E402
+from uav_downloader.apps import watch as watch_app  # noqa: E402
+from uav_downloader.apps.watch_categories import find_target, selection_key  # noqa: E402
 
 
 SCREENSHOTS_DIR = os.path.join(ROOT, 'docs', 'assets')
@@ -86,7 +86,7 @@ def capture_browse():
     config.get_proxy_mode = lambda: 'direct'
     config.get_download_concurrency = lambda: 2
     browse_app.CSV_PATH = os.path.join(
-        tempfile.gettempdir(), 'alos_readme_empty_queue.csv')
+        tempfile.gettempdir(), 'uav_readme_empty_queue.csv')
     try:
         os.remove(browse_app.CSV_PATH)
     except FileNotFoundError:
@@ -99,7 +99,7 @@ def capture_browse():
     app._on_site_change('JableTV')
 
     def finish():
-        capture_window(app, 'alos-browse.png')
+        capture_window(app, 'uav-browser.png')
         app._on_close()
 
     app.after(9000, finish)
@@ -138,7 +138,7 @@ def capture_watch():
         if target:
             app._check_vars[selection_key('MissAV', target['id'])].set(True)
     app._sync_select_all_vars()
-    capture_window(app, 'alos-watch.png')
+    capture_window(app, 'uav-watcher.png')
     app._on_close()
 
 

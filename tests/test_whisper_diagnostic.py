@@ -1,7 +1,7 @@
 import wave
 
-from alos_downloader.core import config
-from alos_downloader.subtitles import engine as subtitles
+from uav_downloader.core import config
+from uav_downloader.subtitles import engine as subtitles
 
 
 def _write_pcm16_wav(path, seconds):

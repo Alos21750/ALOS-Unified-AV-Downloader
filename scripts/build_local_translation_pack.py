@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the reproducible Jable local-translation model archive.
+"""Build the reproducible UAV Downloader local-translation model archive.
 
 The archive is intentionally assembled with Python's standard library so an
 already-converted model tree can be packaged without installing the conversion
@@ -28,6 +28,8 @@ from typing import Iterable, Mapping
 
 
 PACK_VERSION = "1"
+# Preserve the v1 on-disk schema identifier so previously converted model
+# trees remain verifiable; the public archive name is UAV_local_translation_v1.zip.
 PACK_FORMAT = "jable-local-translation-pack"
 CTRANSLATE2_VERSION = "4.8.1"
 QUANTIZATION = "int8"
@@ -599,7 +601,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--output",
         type=Path,
-        default=Path(r"C:\jable_build\Jable_local_translation_v1.zip"),
+        default=Path(r"C:\jable_build\UAV_local_translation_v1.zip"),
         help="Destination ZIP archive.",
     )
     parser.add_argument(

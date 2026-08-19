@@ -10,12 +10,12 @@ from pathlib import Path
 
 import pytest
 
-from alos_downloader.apps import browse as gui_modern
-from alos_downloader.apps import watch as jable_smalltool
-from alos_downloader import core, subtitles
-from alos_downloader.core import bootstrap
-from alos_downloader.i18n import locales
-from alos_downloader.subtitles.engine import SubtitleResult
+from uav_downloader.apps import browse as gui_modern
+from uav_downloader.apps import watch as jable_smalltool
+from uav_downloader import core, subtitles
+from uav_downloader.core import bootstrap
+from uav_downloader.i18n import locales
+from uav_downloader.subtitles.engine import SubtitleResult
 
 
 def _wait_until(predicate, timeout=2):
@@ -36,11 +36,11 @@ def test_smalltool_defers_subtitle_engine_until_download():
         and (
             getattr(node, 'module', None) in {
                 'subtitle_engine',
-                'alos_downloader.subtitles.engine',
+                'uav_downloader.subtitles.engine',
             }
             or any(alias.name in {
                        'subtitle_engine',
-                       'alos_downloader.subtitles.engine',
+                       'uav_downloader.subtitles.engine',
                    }
                    for alias in getattr(node, 'names', ()))
         )
@@ -51,10 +51,10 @@ def test_smalltool_defers_subtitle_engine_until_download():
 def test_both_frozen_entry_points_expose_explicit_translation_diagnostic():
     entrypoint_root = (
         Path(__file__).resolve().parents[1]
-        / 'src' / 'alos_downloader' / 'entrypoints'
+        / 'src' / 'uav_downloader' / 'entrypoints'
     )
     bootstrap_source = Path(bootstrap.__file__).read_text(encoding='utf-8')
-    for prefix in ('ALOS', 'JABLE'):
+    for prefix in ('UAV', 'ALOS', 'JABLE'):
         assert f'{prefix}_LOCAL_TRANSLATION_DIAGNOSTIC_OUTPUT' in (
             bootstrap_source)
         assert f'{prefix}_LOCAL_TRANSLATION_SOAK_DIAGNOSTIC_OUTPUT' in (
@@ -73,10 +73,10 @@ def test_llm_diagnostic_exits_both_entry_points_before_gui_import(
         monkeypatch, tmp_path):
     root = (
         Path(__file__).resolve().parents[1]
-        / 'src' / 'alos_downloader' / 'entrypoints'
+        / 'src' / 'uav_downloader' / 'entrypoints'
     )
     calls = []
-    fake_engine = types.ModuleType('alos_downloader.subtitles.engine')
+    fake_engine = types.ModuleType('uav_downloader.subtitles.engine')
 
     def fake_run(output):
         calls.append(output)
@@ -88,12 +88,12 @@ def test_llm_diagnostic_exits_both_entry_points_before_gui_import(
     fake_engine.run_local_translation_diagnostic = lambda _output: None
     fake_engine.run_local_translation_worker_soak_diagnostic = (
         lambda _output: None)
-    fake_crashlog = types.ModuleType('alos_downloader.core.crashlog')
+    fake_crashlog = types.ModuleType('uav_downloader.core.crashlog')
     fake_crashlog.install = lambda: None
     monkeypatch.setitem(
-        sys.modules, 'alos_downloader.subtitles.engine', fake_engine)
+        sys.modules, 'uav_downloader.subtitles.engine', fake_engine)
     monkeypatch.setitem(
-        sys.modules, 'alos_downloader.core.crashlog', fake_crashlog)
+        sys.modules, 'uav_downloader.core.crashlog', fake_crashlog)
     monkeypatch.setattr(subtitles, 'engine', fake_engine, raising=False)
     monkeypatch.setattr(core, 'crashlog', fake_crashlog, raising=False)
     monkeypatch.delenv(
@@ -104,11 +104,11 @@ def test_llm_diagnostic_exits_both_entry_points_before_gui_import(
 
     real_import = builtins.__import__
     gui_prefixes = {
-        'alos_downloader.apps',
-        'alos_downloader.i18n',
-        'alos_downloader.legacy',
-        'alos_downloader.sites',
-        'alos_downloader.ui',
+        'uav_downloader.apps',
+        'uav_downloader.i18n',
+        'uav_downloader.legacy',
+        'uav_downloader.sites',
+        'uav_downloader.ui',
         'customtkinter',
         'tkinter',
     }

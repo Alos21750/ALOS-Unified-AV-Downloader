@@ -3,10 +3,10 @@ import re
 import types
 from pathlib import Path
 
-from alos_downloader.apps import browse as gui_modern
-from alos_downloader.apps import watch as jable_smalltool
-from alos_downloader.i18n import locales
-from alos_downloader.ui import theme as ui_theme
+from uav_downloader.apps import browse as gui_modern
+from uav_downloader.apps import watch as jable_smalltool
+from uav_downloader.i18n import locales
+from uav_downloader.ui import theme as ui_theme
 
 
 def _rgb(hex_color):
@@ -55,7 +55,7 @@ def test_primary_text_contrast_is_accessible_in_both_themes():
 
 
 def test_current_version_and_global_smalltool_copy_are_complete():
-    assert gui_modern.APP_VERSION == jable_smalltool.APP_VERSION == '3.0.0'
+    assert gui_modern.APP_VERSION == jable_smalltool.APP_VERSION == '3.1.0'
     required = {
         'st_activity', 'st_progress_idle', 'st_footer_short',
         'st_categories_expand', 'st_categories_collapse',
@@ -78,7 +78,7 @@ def test_current_version_and_global_smalltool_copy_are_complete():
         'retry_short', 'requeue_short',
     }
     for language, strings in locales.STRINGS.items():
-        assert strings['version_label'] == 'v3.0.0', language
+        assert strings['version_label'] == 'v3.1.0', language
         assert required <= strings.keys(), language
 
 
@@ -86,17 +86,17 @@ def test_windows_version_resources_match_app_version():
     root = Path(__file__).resolve().parents[1]
     workflow = (root / '.github' / 'workflows' / 'windows-build.yml').read_text(
         encoding='utf-8')
-    assert '$expected = "3.0.0.0"' in workflow
+    assert '$expected = "3.1.0.0"' in workflow
     packaging = root / 'packaging' / 'windows'
     generator = (packaging / 'gen_version.py').read_text(
         encoding='utf-8')
-    assert 'VERSION = (3, 0, 0, 0)' in generator
-    for name in ('ALOS_Browse.version', 'ALOS_Watch.version'):
+    assert 'VERSION = (3, 1, 0, 0)' in generator
+    for name in ('UAV_Browser.version', 'UAV_Watcher.version'):
         resource = (packaging / name).read_text(encoding='utf-8')
-        assert 'filevers=(3, 0, 0, 0)' in resource
-        assert "StringStruct('FileVersion', '3.0.0.0')" in resource
-        assert "StringStruct('ProductName', 'ALOS Unified AV Downloader')" in resource
-    for name in ('ALOS_Browse.spec', 'ALOS_Watch.spec'):
+        assert 'filevers=(3, 1, 0, 0)' in resource
+        assert "StringStruct('FileVersion', '3.1.0.0')" in resource
+        assert "StringStruct('ProductName', 'UAV Downloader')" in resource
+    for name in ('UAV_Browser.spec', 'UAV_Watcher.spec'):
         spec = (packaging / name).read_text(encoding='utf-8')
         assert "'numpy._core._exceptions'" in spec
 
@@ -104,10 +104,10 @@ def test_windows_version_resources_match_app_version():
 def test_windows_distribution_is_hardened_and_verifiable():
     root = Path(__file__).resolve().parents[1]
     browse_spec = (
-        root / 'packaging' / 'windows' / 'ALOS_Browse.spec'
+        root / 'packaging' / 'windows' / 'UAV_Browser.spec'
     ).read_text(encoding='utf-8')
     watch_spec = (
-        root / 'packaging' / 'windows' / 'ALOS_Watch.spec'
+        root / 'packaging' / 'windows' / 'UAV_Watcher.spec'
     ).read_text(encoding='utf-8')
     workflow = (
         root / '.github' / 'workflows' / 'windows-build.yml'
@@ -119,16 +119,16 @@ def test_windows_distribution_is_hardened_and_verifiable():
 
     # SmallTool has no update UI.  Do not bundle Modern's executable
     # downloader/self-replacement helper into its archive.
-    assert "'alos_downloader.core.updater'" in browse_spec
-    assert "'alos_downloader.core.updater'" not in watch_spec
+    assert "'uav_downloader.core.updater'" in browse_spec
+    assert "'uav_downloader.core.updater'" not in watch_spec
 
     # Keep the convenient one-file build, but also ship a SmallTool onedir
     # fallback that does not self-extract through a _MEI directory.
     assert 'exclude_binaries=True' in watch_spec
     assert 'COLLECT(' in watch_spec
-    assert "name='ALOS_Watch_portable'" in watch_spec
+    assert "name='UAV_Watcher_portable'" in watch_spec
     assert "portable = '--portable' in sys.argv" in watch_spec
-    assert 'ALOS_Watch.spec -- --portable' in workflow
+    assert 'UAV_Watcher.spec -- --portable' in workflow
 
     # The official PyInstaller guidance recommends rebuilding its bootloader
     # from source to reduce false positives tied to widely shared bootloaders.
@@ -142,11 +142,11 @@ def test_windows_distribution_is_hardened_and_verifiable():
 
     # Checksums and provenance help users verify origin.  They do not replace
     # Authenticode and must remain separate from malware-detection claims.
-    assert 'ALOS_Watch_portable.zip' in workflow
+    assert 'UAV_Watcher_portable.zip' in workflow
     assert 'Jable_smalltool_portable.zip' in workflow
     assert 'SHA256SUMS.txt' in workflow
-    assert '-Path "dist\\ALOS_Watch_portable"' in workflow
-    assert '-Path "dist\\ALOS_Watch_portable\\*"' not in workflow
+    assert '-Path "dist\\UAV_Watcher_portable"' in workflow
+    assert '-Path "dist\\UAV_Watcher_portable\\*"' not in workflow
     assert 'actions/attest@v4' in workflow
     assert 'attestations: write' in workflow
     assert 'Compatibility alias is not byte-identical' in workflow
@@ -178,9 +178,9 @@ def test_all_readme_languages_are_complete_and_cross_linked():
         assert len(text.splitlines()) >= 70, language
         assert all(label in text for label in language_labels), language
         assert all(token in text for token in (
-            'ALOS Unified AV Downloader', 'ALOS_Browse.exe', 'ALOS_Watch.exe',
+            'UAV Downloader', 'UAV_Browser.exe', 'UAV_Watcher.exe',
             '.ja.srt', '.en.srt', '.zh-TW.srt',
-            'ghcr.io/alos21750/alos-unified-av-downloader:latest',
+            'ghcr.io/alos21750/uav-downloader:latest',
             'JableTV', 'MissAV', 'SupJav', 'Hanime1',
         )), language
 
@@ -200,12 +200,12 @@ def test_windows_security_guidance_does_not_ask_for_defender_bypass():
     security = security_path.read_text(encoding='utf-8')
     combined = '\n'.join((traditional, english, security))
 
-    assert 'ALOS_Watch_portable.zip' in combined
+    assert 'UAV_Watcher_portable.zip' in combined
     assert 'SHA256SUMS.txt' in security
     assert 'Get-FileHash' in security
     assert 'gh attestation verify' in security
     assert (
-        'gh attestation verify .\\ALOS_Watch_portable.zip'
+        'gh attestation verify .\\UAV_Watcher_portable.zip'
         in security)
     assert 'https://www.microsoft.com/wdsi/filesubmission' in security
     assert 'SmartScreen' in security

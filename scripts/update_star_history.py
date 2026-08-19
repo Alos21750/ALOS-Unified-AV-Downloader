@@ -52,7 +52,7 @@ def graphql(token: str, variables: dict) -> dict:
             'Accept': 'application/vnd.github+json',
             'Authorization': f'Bearer {token}',
             'Content-Type': 'application/json',
-            'User-Agent': 'ALOS-Unified-AV-Downloader-star-history',
+            'User-Agent': 'UAV-Downloader-star-history',
         },
         method='POST',
     )

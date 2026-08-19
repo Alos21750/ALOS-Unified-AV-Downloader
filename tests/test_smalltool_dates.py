@@ -29,7 +29,7 @@ def _m3u8_stub():
 _stub_runtime_dependency('cloudscraper', _cloudscraper_stub)
 _stub_runtime_dependency('m3u8', _m3u8_stub)
 
-from alos_downloader.apps.watch import SmallToolWorker, _months_before
+from uav_downloader.apps.watch import SmallToolWorker, _months_before
 
 
 def test_parse_relative_date_multilingual():

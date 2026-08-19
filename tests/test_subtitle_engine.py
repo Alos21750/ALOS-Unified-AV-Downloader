@@ -10,8 +10,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from alos_downloader.core import config
-from alos_downloader.subtitles import engine as subtitles
+from uav_downloader.core import config
+from uav_downloader.subtitles import engine as subtitles
 
 
 def _sample_srt(text='こんにちは'):
@@ -227,7 +227,7 @@ def test_interprocess_cache_lock_serializes_two_app_processes(tmp_path):
     code = (
         "import os,sys,time\n"
         "os.environ['LOCALAPPDATA']=sys.argv[1]\n"
-        "from alos_downloader.subtitles.engine import _interprocess_cache_lock\n"
+        "from uav_downloader.subtitles.engine import _interprocess_cache_lock\n"
         "name=sys.argv[2]\n"
         "log=sys.argv[3]\n"
         "def write(value):\n"
@@ -940,7 +940,7 @@ def test_local_translation_worker_soak_diagnostic_runs_one_parent_cycle(
     payload = subtitles.run_local_translation_worker_soak_diagnostic(
         str(output), iterations=3)
 
-    assert payload['kind'] == 'jable_local_translation_worker_soak'
+    assert payload['kind'] == 'uav_local_translation_worker_soak'
     assert payload['iterations'] == 3
     assert payload['worker_cycles'] == 6
     assert [row['job'] for row in payload['rows']] == [1, 2, 3]

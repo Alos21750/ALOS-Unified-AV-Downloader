@@ -3,7 +3,7 @@
 
 The source runtime and model archives are official upstream release assets.
 This script intentionally repackages only the three Windows runtime files and
-the hybrid INT8/FP32 Japanese model files used by Jable. It never downloads
+the hybrid INT8/FP32 Japanese model files used by UAV Downloader. It never downloads
 mutable files at application runtime and never includes the much larger
 all-FP32 model.
 """
@@ -20,6 +20,8 @@ from pathlib import Path, PurePosixPath
 
 
 PACK_VERSION = "1"
+# Format identifiers are immutable compatibility contracts for the already
+# published v1 pack; the public archive name is UAV_reazonspeech_asr_v1.zip.
 PACK_FORMAT = "jable-reazonspeech-asr-pack"
 FIXED_ZIP_TIMESTAMP = (1980, 1, 1, 0, 0, 0)
 

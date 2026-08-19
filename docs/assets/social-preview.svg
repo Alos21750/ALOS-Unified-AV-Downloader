@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img" aria-labelledby="title description">
-  <title id="title">ALOS Unified AV Downloader</title>
+  <title id="title">UAV Downloader</title>
   <desc id="description">Interactive browsing, unattended automation, Docker and local AI subtitles for JableTV, MissAV, SupJav and Hanime1.</desc>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
@@ -22,9 +22,9 @@
 
   <g transform="translate(76 68)">
     <rect width="74" height="74" rx="18" fill="#ff5263"/>
-    <path d="M20 51 L37 18 L54 51 M27 39 H47" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
-    <text x="94" y="30" fill="#ff6474" font-family="Segoe UI, Arial, sans-serif" font-size="17" font-weight="700" letter-spacing="3">ALOS</text>
-    <text x="94" y="65" fill="#f7f7f8" font-family="Segoe UI, Arial, sans-serif" font-size="28" font-weight="650">Unified AV Downloader</text>
+    <path d="M37 17 V47 M25 36 L37 48 L49 36 M20 57 H54" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="94" y="30" fill="#ff6474" font-family="Segoe UI, Arial, sans-serif" font-size="17" font-weight="700" letter-spacing="3">UAV</text>
+    <text x="94" y="65" fill="#f7f7f8" font-family="Segoe UI, Arial, sans-serif" font-size="28" font-weight="650">Downloader</text>
   </g>
 
   <g transform="translate(76 190)">
@@ -38,7 +38,7 @@
       <rect width="320" height="116" rx="18" fill="#17171d" stroke="#34343e"/>
       <circle cx="46" cy="44" r="18" fill="#ff5263"/>
       <path d="M40 44 L45 49 L54 38" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-      <text x="76" y="41" fill="#fff" font-size="22" font-weight="700">ALOS Browse</text>
+      <text x="76" y="41" fill="#fff" font-size="22" font-weight="700">UAV Browser</text>
       <text x="76" y="68" fill="#aaaab4" font-size="16">Search, select and queue</text>
       <text x="28" y="96" fill="#ff7a87" font-size="14" font-weight="650">WINDOWS · INTERACTIVE</text>
     </g>
@@ -46,7 +46,7 @@
       <rect width="320" height="116" rx="18" fill="#17171d" stroke="#34343e"/>
       <circle cx="46" cy="44" r="18" fill="#ff5263"/>
       <path d="M46 33 V45 L55 51" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round"/>
-      <text x="76" y="41" fill="#fff" font-size="22" font-weight="700">ALOS Watch</text>
+      <text x="76" y="41" fill="#fff" font-size="22" font-weight="700">UAV Watcher</text>
       <text x="76" y="68" fill="#aaaab4" font-size="16">Schedule once, run unattended</text>
       <text x="28" y="96" fill="#ff7a87" font-size="14" font-weight="650">WINDOWS · AUTOMATION</text>
     </g>
@@ -54,7 +54,7 @@
       <rect width="320" height="116" rx="18" fill="#17171d" stroke="#34343e"/>
       <circle cx="46" cy="44" r="18" fill="#ff5263"/>
       <path d="M37 38 L45 44 L37 50 M49 50 H57" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
-      <text x="76" y="41" fill="#fff" font-size="22" font-weight="700">ALOS Headless</text>
+      <text x="76" y="41" fill="#fff" font-size="22" font-weight="700">UAV Downloader CLI</text>
       <text x="76" y="68" fill="#aaaab4" font-size="16">Docker, NAS and CLI</text>
       <text x="28" y="96" fill="#ff7a87" font-size="14" font-weight="650">AMD64 · ARM64</text>
     </g>
@@ -68,6 +68,6 @@
     <text x="183" y="24" fill="#8f8f99" font-size="17">SupJav</text>
     <circle cx="250" cy="19" r="3" fill="#ff5263"/>
     <text x="266" y="24" fill="#8f8f99" font-size="17">Hanime1</text>
-    <text x="996" y="24" text-anchor="end" fill="#f2f2f4" font-size="17" font-weight="650">github.com/Alos21750</text>
+    <text x="996" y="24" text-anchor="end" fill="#f2f2f4" font-size="17" font-weight="650">github.com/Alos21750/UAV-Downloader</text>
   </g>
 </svg>

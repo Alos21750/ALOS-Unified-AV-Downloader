@@ -3,8 +3,8 @@ requires = ["setuptools>=69", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "alos-unified-av-downloader"
-version = "3.0.0"
+name = "uav-downloader"
+version = "3.1.0"
 description = "JableTV, MissAV, SupJav and Hanime1 downloader with unattended automation and local AI subtitles"
 readme = "README.en.md"
 requires-python = ">=3.10"
@@ -34,17 +34,18 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/Alos21750/ALOS-Unified-AV-Downloader"
-Releases = "https://github.com/Alos21750/ALOS-Unified-AV-Downloader/releases"
-Issues = "https://github.com/Alos21750/ALOS-Unified-AV-Downloader/issues"
+Homepage = "https://github.com/Alos21750/UAV-Downloader"
+Releases = "https://github.com/Alos21750/UAV-Downloader/releases"
+Issues = "https://github.com/Alos21750/UAV-Downloader/issues"
 
 [project.scripts]
-alos = "alos_downloader.cli.main:main"
-alos-headless = "alos_downloader.cli.headless:main"
+uav = "uav_downloader.cli.main:main"
+uav-downloader = "uav_downloader.cli.main:main"
+uav-downloader-cli = "uav_downloader.cli.headless:main"
 
 [project.gui-scripts]
-alos-browse = "alos_downloader.entrypoints.browse:main"
-alos-watch = "alos_downloader.entrypoints.watch:main"
+uav-browser = "uav_downloader.entrypoints.browse:main"
+uav-watcher = "uav_downloader.entrypoints.watch:main"
 
 [tool.setuptools]
 package-dir = { "" = "src" }

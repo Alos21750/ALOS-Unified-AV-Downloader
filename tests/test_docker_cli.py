@@ -1,6 +1,6 @@
 import sys
 
-from alos_downloader.cli import headless as docker_cli
+from uav_downloader.cli import headless as docker_cli
 
 
 def test_docker_worker_limit_is_forwarded_to_each_video(monkeypatch, tmp_path):

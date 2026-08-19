@@ -25,8 +25,8 @@ def _m3u8_stub():
 _stub_runtime_dependency('cloudscraper', _cloudscraper_stub)
 _stub_runtime_dependency('m3u8', _m3u8_stub)
 
-from alos_downloader.apps.watch import SmallToolWorker
-from alos_downloader.apps.watch_categories import SITES, find_target, iter_targets, selection_key
+from uav_downloader.apps.watch import SmallToolWorker
+from uav_downloader.apps.watch_categories import SITES, find_target, iter_targets, selection_key
 
 
 def test_smalltool_registry_has_complete_grouped_targets():

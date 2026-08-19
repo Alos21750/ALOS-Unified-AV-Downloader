@@ -1,6 +1,7 @@
 name: docker-publish
 
-# Builds ALOS Headless and publishes the canonical image plus its v2 alias.
+# Builds UAV Downloader CLI and publishes the canonical image plus transition
+# aliases so existing NAS deployments keep receiving updates.
 on:
   push:
     branches: [master]
@@ -38,6 +39,7 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: |
+            ghcr.io/${{ github.repository_owner }}/uav-downloader
             ghcr.io/${{ github.repository_owner }}/alos-unified-av-downloader
             ghcr.io/${{ github.repository_owner }}/jabletv
           tags: |

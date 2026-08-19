@@ -4,8 +4,8 @@ import json
 import pytest
 import requests
 
-from alos_downloader.subtitles import llm
-from alos_downloader.core.ssl import SharedSSLAdapter
+from uav_downloader.subtitles import llm
+from uav_downloader.core.ssl import SharedSSLAdapter
 
 
 class FakeResponse:
@@ -173,7 +173,7 @@ def test_openai_batches_in_order_mounts_shared_ssl_and_reports_progress():
 
 
 def test_provider_requests_follow_the_app_proxy_setting(monkeypatch):
-    from alos_downloader.core import config
+    from uav_downloader.core import config
 
     routes = {
         'http': 'http://127.0.0.1:8080',
@@ -194,7 +194,7 @@ def test_provider_requests_follow_the_app_proxy_setting(monkeypatch):
 
 def test_proxy_configuration_failure_falls_back_to_explicit_direct(
         monkeypatch):
-    from alos_downloader.core import config
+    from uav_downloader.core import config
 
     def fail_proxy_read():
         raise OSError("proxy settings unavailable")
@@ -213,7 +213,7 @@ def test_proxy_configuration_failure_falls_back_to_explicit_direct(
 
 
 def test_loopback_provider_bypasses_the_app_proxy(monkeypatch):
-    from alos_downloader.core import config
+    from uav_downloader.core import config
 
     monkeypatch.setattr(
         config,

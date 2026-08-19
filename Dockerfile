@@ -1,4 +1,4 @@
-# ALOS Headless — unified JableTV, MissAV, SupJav and Hanime1 downloader.
+# UAV Downloader CLI — unified JableTV, MissAV, SupJav and Hanime1 downloader.
 # Pass URL(s); videos are downloaded to /downloads without a GUI.
 FROM python:3.12-slim
 
@@ -21,4 +21,4 @@ ENV DOWNLOAD_DIR=/downloads \
 VOLUME ["/downloads"]
 
 # URL(s) are passed as CMD args (or via URLS / URLS_FILE env)
-ENTRYPOINT ["python", "-u", "-m", "alos_downloader.cli.headless"]
+ENTRYPOINT ["python", "-u", "-m", "uav_downloader.cli.headless"]

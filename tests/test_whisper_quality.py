@@ -3,10 +3,10 @@ import json
 import os
 import wave
 
-from alos_downloader.core import config
+from uav_downloader.core import config
 import pytest
 
-from alos_downloader.subtitles import engine as subtitles
+from uav_downloader.subtitles import engine as subtitles
 
 
 def _write_pcm16_wav(path, seconds=1.0):
@@ -677,14 +677,14 @@ def _valid_srt(text):
 
 
 def _write_stale_manifest(video, language, subtitle_path, srt_sha256):
-    manifest_path = video.with_suffix('.jable-subtitles.json')
+    manifest_path = video.with_suffix('.uav-subtitles.json')
     manifest_path.write_text(
         json.dumps({
             'schema': 1,
-            'kind': 'jable_subtitle_provenance',
+            'kind': 'uav_subtitle_provenance',
             'tracks': {
                 language: {
-                    'generator': 'jable',
+                    'generator': 'uav',
                     'srt_sha256': srt_sha256,
                     'asr_signature': 'obsolete-asr-pipeline',
                     'translation_signature': 'obsolete-translation',
@@ -808,14 +808,14 @@ def test_user_edit_after_generation_is_never_overwritten(
     japanese = tmp_path / 'movie.ja.srt'
     video.write_bytes(b'video')
     japanese.write_text(_valid_srt('人工修正後'), encoding='utf-8')
-    manifest_path = video.with_suffix('.jable-subtitles.json')
+    manifest_path = video.with_suffix('.uav-subtitles.json')
     manifest_path.write_text(
         json.dumps({
             'schema': 1,
-            'kind': 'jable_subtitle_provenance',
+            'kind': 'uav_subtitle_provenance',
             'tracks': {
                 'ja': {
-                    'generator': 'jable',
+                    'generator': 'uav',
                     'srt_sha256': '0' * 64,
                     'asr_signature': 'obsolete-asr-pipeline',
                 },

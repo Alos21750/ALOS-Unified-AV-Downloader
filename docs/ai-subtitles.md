@@ -1,6 +1,6 @@
 # Local-first AI subtitles
 
-ALOS Browse and ALOS Watch can create selectable sidecar subtitles after a
+UAV Browser and UAV Watcher can create selectable sidecar subtitles after a
 video finishes downloading. The MP4 is not modified.
 
 Available output modes are off, Japanese, English, Traditional Chinese, or all
@@ -23,7 +23,7 @@ Explicit whisper.cpp profiles remain available:
 
 Silero VAD is used as a speech gate. Recognition windows preserve source
 silence and are mapped back to absolute video time so that subtitles do not
-collapse toward the beginning of the video. ALOS records pipeline provenance
+collapse toward the beginning of the video. UAV Downloader records pipeline provenance
 and regenerates its own outputs when the selected pipeline changes, while
 preserving user-edited or unknown-origin SRT files.
 

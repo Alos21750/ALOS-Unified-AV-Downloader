@@ -1,6 +1,6 @@
 import json
 
-from alos_downloader.apps import watch as jable_smalltool
+from uav_downloader.apps import watch as jable_smalltool
 
 
 def test_blank_saved_folder_falls_back_to_tmp_beside_app(monkeypatch, tmp_path):
