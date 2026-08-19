@@ -1,20 +1,15 @@
 name: docker-publish
 
-# Builds the headless downloader image and pushes it to GitHub Container Registry
-# (ghcr.io/<owner>/jabletv). Runs on GitHub's runners — no local Docker needed.
+# Builds ALOS Headless and publishes the canonical image plus its v2 alias.
 on:
   push:
     branches: [master]
     paths:
       - 'Dockerfile'
-      - 'docker_cli.py'
+      - 'src/**'
+      - 'pyproject.toml'
       - 'requirements-docker.txt'
       - '.dockerignore'
-      - 'M3U8Sites/**'
-      - 'config.py'
-      - 'ssl_util.py'
-      - 'site_i18n.py'
-      - 'crashlog.py'
       - '.github/workflows/docker-publish.yml'
     tags: ['v*']
   workflow_dispatch: {}   # allow manual runs from the Actions tab
@@ -42,7 +37,9 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ github.repository_owner }}/jabletv
+          images: |
+            ghcr.io/${{ github.repository_owner }}/alos-unified-av-downloader
+            ghcr.io/${{ github.repository_owner }}/jabletv
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=ref,event=tag

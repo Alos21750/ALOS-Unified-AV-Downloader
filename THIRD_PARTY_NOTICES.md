@@ -2,7 +2,7 @@
 
 ## Optional local Japanese speech-recognition pack
 
-The optional `Jable_reazonspeech_asr_v1.zip` archive is a mixed-license,
+The optional `ALOS_reazonspeech_asr_v1.zip` archive is a mixed-license,
 CPU-only Japanese speech-recognition pack. It contains only the pinned model
 and Windows runtime files used by Jable:
 

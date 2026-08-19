@@ -1,9 +1,9 @@
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
-import jable_smalltool
-from smalltool_categories import find_target
-from video_identity import trusted_chinese_subtitle_evidence
+from alos_downloader.apps import watch as jable_smalltool
+from alos_downloader.apps.watch_categories import find_target
+from alos_downloader.core.video_identity import trusted_chinese_subtitle_evidence
 
 
 def _exact_missav_targets():

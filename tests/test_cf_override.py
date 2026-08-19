@@ -17,8 +17,8 @@ def _m3u8_stub():
 
 _stub_runtime_dependency('m3u8', _m3u8_stub)
 
-import config
-from M3U8Sites.M3U8Crawler import fetch_with_mirrors
+from alos_downloader.core import config
+from alos_downloader.sites.base import fetch_with_mirrors
 
 
 def _reset_cf():

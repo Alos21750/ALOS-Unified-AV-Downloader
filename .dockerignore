@@ -3,7 +3,8 @@
 .claude
 .wrangler
 tests
-build_tmp
+build
+dist
 *.exe
 *.spec
 *.version

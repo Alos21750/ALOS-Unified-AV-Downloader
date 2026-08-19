@@ -1,13 +1,13 @@
 # NAS-friendly compose. Put URLs (one per line) in ./downloads/urls.txt, then:
-#   docker compose run --rm jabletv               # downloads everything in urls.txt
-#   docker compose run --rm jabletv <URL> [<URL>] # or pass URL(s) directly
+#   docker compose run --rm alos               # downloads everything in urls.txt
+#   docker compose run --rm alos <URL> [<URL>] # or pass URL(s) directly
 # Videos land in ./downloads on the host.
 services:
-  jabletv:
-    image: ghcr.io/alos21750/jabletv:latest
+  alos:
+    image: ghcr.io/alos21750/alos-unified-av-downloader:latest
     # To build locally instead of pulling, comment out `image:` and uncomment:
     # build: .
-    container_name: jabletv-downloader
+    container_name: alos-unified-downloader
     volumes:
       - ./downloads:/downloads
     environment:

@@ -2,10 +2,10 @@ from types import SimpleNamespace
 
 import pytest
 
-import config
-import llm_translation
-import subtitle_engine as subtitles
-from translation_settings import TranslationSettings
+from alos_downloader.core import config
+from alos_downloader.subtitles import llm as llm_translation
+from alos_downloader.subtitles import engine as subtitles
+from alos_downloader.subtitles.settings import TranslationSettings
 
 
 def _profile(

@@ -2,7 +2,7 @@ from datetime import datetime, timedelta, timezone
 import threading
 import time
 
-import jable_smalltool
+from alos_downloader.apps import watch as jable_smalltool
 
 
 def _interval_config(hours=24, last_check_iso=None):

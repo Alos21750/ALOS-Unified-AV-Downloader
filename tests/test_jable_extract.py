@@ -14,8 +14,8 @@ def _stub(name, factory=None):
 _stub('cloudscraper')
 _stub('customtkinter')
 
-import M3U8Sites.SiteJableTV as jable_mod
-from M3U8Sites.SiteJableTV import JableTVBrowser, SiteJableTV
+from alos_downloader.sites import jabletv as jable_mod
+from alos_downloader.sites.jabletv import JableTVBrowser, SiteJableTV
 
 
 def test_parse_page_precise_on_minified_html():

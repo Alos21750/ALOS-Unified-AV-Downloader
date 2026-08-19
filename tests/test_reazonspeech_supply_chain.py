@@ -6,7 +6,8 @@ from scripts import build_reazonspeech_asr_pack as builder
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / '.github' / 'workflows' / 'windows-build.yml'
 
-PACK_NAME = 'Jable_reazonspeech_asr_v1.zip'
+PACK_NAME = 'ALOS_reazonspeech_asr_v1.zip'
+LEGACY_PACK_NAME = 'Jable_reazonspeech_asr_v1.zip'
 PACK_SIZE = 186_186_197
 PACK_SHA256 = (
     'cf55e5485e14715beee6e0b12ca2b0998ad73ec755513e80138fa5161693c700'
@@ -63,8 +64,10 @@ def test_windows_ci_gates_attests_and_uploads_the_exact_pack():
     assert PACK_SHA256 in workflow
     assert MANIFEST_SHA256 in workflow
     assert workflow.count(PACK_NAME) >= 5
-    assert '"Jable_reazonspeech_asr_v1.zip"' in workflow
-    assert 'dist/Jable_reazonspeech_asr_v1.zip' in workflow
+    assert f'"{PACK_NAME}"' in workflow
+    assert f'dist/{PACK_NAME}' in workflow
+    assert f'"{LEGACY_PACK_NAME}"' in workflow
+    assert f'dist/{LEGACY_PACK_NAME}' in workflow
     assert 'actions/attest@v4' in workflow
     assert 'compression-level: 0' in workflow
 

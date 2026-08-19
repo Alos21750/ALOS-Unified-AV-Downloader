@@ -3,10 +3,10 @@ import json
 import os
 import wave
 
-import config
+from alos_downloader.core import config
 import pytest
 
-import subtitle_engine as subtitles
+from alos_downloader.subtitles import engine as subtitles
 
 
 def _write_pcm16_wav(path, seconds=1.0):

@@ -1,7 +1,7 @@
 import shutil
 
-import config
-import subtitle_engine as subtitles
+from alos_downloader.core import config
+from alos_downloader.subtitles import engine as subtitles
 
 
 def _srt(text):

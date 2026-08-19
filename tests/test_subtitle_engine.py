@@ -10,8 +10,8 @@ from types import SimpleNamespace
 
 import pytest
 
-import config
-import subtitle_engine as subtitles
+from alos_downloader.core import config
+from alos_downloader.subtitles import engine as subtitles
 
 
 def _sample_srt(text='こんにちは'):
@@ -227,7 +227,7 @@ def test_interprocess_cache_lock_serializes_two_app_processes(tmp_path):
     code = (
         "import os,sys,time\n"
         "os.environ['LOCALAPPDATA']=sys.argv[1]\n"
-        "from subtitle_engine import _interprocess_cache_lock\n"
+        "from alos_downloader.subtitles.engine import _interprocess_cache_lock\n"
         "name=sys.argv[2]\n"
         "log=sys.argv[3]\n"
         "def write(value):\n"
@@ -238,10 +238,16 @@ def test_interprocess_cache_lock_serializes_two_app_processes(tmp_path):
         "  if name=='A': time.sleep(0.4)\n"
         "  write(name+'-exit')\n"
     )
-    root = os.path.dirname(subtitles.__file__)
+    root = os.path.dirname(os.path.dirname(__file__))
+    child_env = os.environ.copy()
+    source_root = os.path.join(root, 'src')
+    child_env['PYTHONPATH'] = os.pathsep.join(filter(None, (
+        source_root,
+        child_env.get('PYTHONPATH', ''),
+    )))
     first = subprocess.Popen(
         [sys.executable, '-c', code, str(tmp_path), 'A', str(log)],
-        cwd=root)
+        cwd=root, env=child_env)
     deadline = time.monotonic() + 10
     while time.monotonic() < deadline:
         if log.is_file() and 'A-enter' in log.read_text(encoding='utf-8'):
@@ -253,7 +259,7 @@ def test_interprocess_cache_lock_serializes_two_app_processes(tmp_path):
 
     second = subprocess.Popen(
         [sys.executable, '-c', code, str(tmp_path), 'B', str(log)],
-        cwd=root)
+        cwd=root, env=child_env)
     assert first.wait(timeout=15) == 0
     assert second.wait(timeout=15) == 0
     assert log.read_text(encoding='utf-8').splitlines() == [

@@ -1,0 +1,57 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "alos-unified-av-downloader"
+version = "3.0.0"
+description = "JableTV, MissAV, SupJav and Hanime1 downloader with unattended automation and local AI subtitles"
+readme = "README.en.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [{ name = "ALOS", email = "alos21750@users.noreply.github.com" }]
+keywords = [
+  "jabletv",
+  "missav",
+  "supjav",
+  "hanime1",
+  "video-downloader",
+  "av-downloader",
+  "jav-downloader",
+  "automatic-downloader",
+  "unattended-downloader",
+  "ai-subtitles",
+  "docker",
+]
+classifiers = [
+  "Development Status :: 5 - Production/Stable",
+  "License :: OSI Approved :: Apache Software License",
+  "Operating System :: Microsoft :: Windows",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+]
+
+[project.urls]
+Homepage = "https://github.com/Alos21750/ALOS-Unified-AV-Downloader"
+Releases = "https://github.com/Alos21750/ALOS-Unified-AV-Downloader/releases"
+Issues = "https://github.com/Alos21750/ALOS-Unified-AV-Downloader/issues"
+
+[project.scripts]
+alos = "alos_downloader.cli.main:main"
+alos-headless = "alos_downloader.cli.headless:main"
+
+[project.gui-scripts]
+alos-browse = "alos_downloader.entrypoints.browse:main"
+alos-watch = "alos_downloader.entrypoints.watch:main"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

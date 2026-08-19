@@ -1,8 +1,8 @@
 import pytest
 
-import locales
-import translation_settings_ui as ui
-from translation_settings import (
+from alos_downloader.i18n import locales
+from alos_downloader.ui import translation_settings as ui
+from alos_downloader.subtitles.settings import (
     ANTHROPIC,
     GEMINI,
     LOCAL,

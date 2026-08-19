@@ -31,9 +31,9 @@ def _m3u8_stub():
 _stub_runtime_dependency('cloudscraper', _cloudscraper_stub)
 _stub_runtime_dependency('m3u8', _m3u8_stub)
 
-import config
-import locales
-from M3U8Sites.SiteMissAV import MissAVBrowser
+from alos_downloader.core import config
+from alos_downloader.i18n import locales
+from alos_downloader.sites.missav import MissAVBrowser
 
 
 LANGS = ['en', 'zh', 'zh-Hans', 'ja']

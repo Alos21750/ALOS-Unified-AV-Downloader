@@ -27,7 +27,7 @@ jobs:
 
       - name: Commit changed chart
         run: |
-          git add img/star-history.svg
+          git add docs/assets/star-history.svg
           if git diff --cached --quiet; then
             echo "Star history is already current."
             exit 0

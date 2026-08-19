@@ -45,11 +45,11 @@ _stub_runtime_dependency('cloudscraper', _cloudscraper_stub)
 _stub_runtime_dependency('m3u8', _m3u8_stub)
 _stub_runtime_dependency('customtkinter', _customtkinter_stub)
 
-import M3U8Sites.M3U8Crawler as crawler_mod
-import M3U8Sites.SiteSupJav as supjav_mod
+from alos_downloader.sites import base as crawler_mod
+from alos_downloader.sites import supjav as supjav_mod
 from bs4 import BeautifulSoup
-from M3U8Sites.M3U8Crawler import M3U8Crawler
-from M3U8Sites.SiteSupJav import (
+from alos_downloader.sites.base import M3U8Crawler
+from alos_downloader.sites.supjav import (
     SiteSupJav,
     SupJavBrowser,
     _extract_m3u8,
@@ -81,7 +81,7 @@ def test_supjav_validate_url_is_anchored():
 
 
 def test_supjav_video_urls_are_not_listing_urls():
-    from gui_modern import ModernApp
+    from alos_downloader.apps.browse import ModernApp
 
     assert ModernApp._is_listing_url(None, 'https://supjav.com/12345.html') is False
     assert ModernApp._is_listing_url(None, 'https://supjav.com/zh/12345.html') is False

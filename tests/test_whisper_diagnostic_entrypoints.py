@@ -7,38 +7,49 @@ from pathlib import Path
 
 import pytest
 
+from alos_downloader import core, subtitles
+
 
 ROOT = Path(__file__).resolve().parent.parent
-ENTRY_POINTS = ('main.py', 'jable_smalltool.py')
-GUI_IMPORT_ROOTS = {
-    'args',
+ENTRY_POINTS = ('browse.py', 'watch.py')
+ENTRYPOINT_ROOT = ROOT / 'src' / 'alos_downloader' / 'entrypoints'
+GUI_IMPORT_PREFIXES = {
+    'alos_downloader.apps',
+    'alos_downloader.i18n',
+    'alos_downloader.legacy',
+    'alos_downloader.sites',
+    'alos_downloader.ui',
     'customtkinter',
-    'gui',
-    'gui_modern',
-    'M3U8Sites',
     'tkinter',
-    'translation_settings_ui',
 }
 
 
 def _install_safe_modules(monkeypatch, diagnostic):
-    fake_engine = types.ModuleType('subtitle_engine')
+    fake_engine = types.ModuleType('alos_downloader.subtitles.engine')
     fake_engine.run_whisper_diagnostic = diagnostic
     fake_engine.run_local_translation_diagnostic = lambda _output: None
     fake_engine.run_local_translation_worker_soak_diagnostic = (
         lambda _output: None)
     fake_engine.run_llm_translation_diagnostic = lambda _output: None
-    fake_crashlog = types.ModuleType('crashlog')
+    fake_crashlog = types.ModuleType('alos_downloader.core.crashlog')
     fake_crashlog.install = lambda: None
-    monkeypatch.setitem(sys.modules, 'subtitle_engine', fake_engine)
-    monkeypatch.setitem(sys.modules, 'crashlog', fake_crashlog)
+    monkeypatch.setitem(
+        sys.modules, 'alos_downloader.subtitles.engine', fake_engine)
+    monkeypatch.setitem(
+        sys.modules, 'alos_downloader.core.crashlog', fake_crashlog)
+    monkeypatch.setattr(subtitles, 'engine', fake_engine, raising=False)
+    monkeypatch.setattr(core, 'crashlog', fake_crashlog, raising=False)
 
 
 def _reject_gui_imports(monkeypatch):
     real_import = builtins.__import__
 
     def guarded_import(name, *args, **kwargs):
-        if str(name).split('.', 1)[0] in GUI_IMPORT_ROOTS:
+        module_name = str(name)
+        if any(
+            module_name == prefix or module_name.startswith(prefix + '.')
+            for prefix in GUI_IMPORT_PREFIXES
+        ):
             raise AssertionError(
                 f'GUI/heavy module imported during diagnostic: {name}')
         return real_import(name, *args, **kwargs)
@@ -82,7 +93,8 @@ def test_whisper_diagnostic_runs_before_gui_import(
     monkeypatch.setenv('JABLE_WHISPER_DIAGNOSTIC_OUTPUT', str(report))
 
     with pytest.raises(SystemExit) as caught:
-        runpy.run_path(str(ROOT / filename), run_name='__main__')
+        runpy.run_path(
+            str(ENTRYPOINT_ROOT / filename), run_name='__main__')
 
     assert caught.value.code == 0
     assert calls == [(str(media.resolve()), str(report.resolve()))]
@@ -123,7 +135,8 @@ def test_malformed_whisper_diagnostic_fails_closed_without_gui_or_details(
         monkeypatch.setenv('JABLE_WHISPER_DIAGNOSTIC_OUTPUT', output_value)
 
     with pytest.raises(SystemExit) as caught:
-        runpy.run_path(str(ROOT / filename), run_name='__main__')
+        runpy.run_path(
+            str(ENTRYPOINT_ROOT / filename), run_name='__main__')
 
     assert caught.value.code == 2
     assert capsys.readouterr() == ('', '')
@@ -146,7 +159,8 @@ def test_whisper_diagnostic_failure_does_not_expose_exception_or_paths(
     monkeypatch.setenv('JABLE_WHISPER_DIAGNOSTIC_OUTPUT', str(report))
 
     with pytest.raises(SystemExit) as caught:
-        runpy.run_path(str(ROOT / filename), run_name='__main__')
+        runpy.run_path(
+            str(ENTRYPOINT_ROOT / filename), run_name='__main__')
 
     assert caught.value.code == 2
     assert capsys.readouterr() == ('', '')
@@ -167,7 +181,8 @@ def test_whisper_diagnostic_cannot_reuse_a_stale_report(
     monkeypatch.setenv('JABLE_WHISPER_DIAGNOSTIC_OUTPUT', str(report))
 
     with pytest.raises(SystemExit) as caught:
-        runpy.run_path(str(ROOT / filename), run_name='__main__')
+        runpy.run_path(
+            str(ENTRYPOINT_ROOT / filename), run_name='__main__')
 
     assert caught.value.code == 2
     assert not report.exists()
@@ -199,7 +214,7 @@ def test_translation_diagnostic_failure_is_silent_and_cannot_reuse_stale_report(
     report.write_text('{"kind":"stale"}', encoding='utf-8')
 
     _install_safe_modules(monkeypatch, lambda *_args: None)
-    fake_engine = sys.modules['subtitle_engine']
+    fake_engine = sys.modules['alos_downloader.subtitles.engine']
 
     def fail_without_writing(_output_path):
         raise RuntimeError('secret provider key and private response')
@@ -214,7 +229,8 @@ def test_translation_diagnostic_failure_is_silent_and_cannot_reuse_stale_report(
     monkeypatch.setenv(environment_name, str(report))
 
     with pytest.raises(SystemExit) as caught:
-        runpy.run_path(str(ROOT / filename), run_name='__main__')
+        runpy.run_path(
+            str(ENTRYPOINT_ROOT / filename), run_name='__main__')
 
     assert caught.value.code == 2
     assert not report.exists()

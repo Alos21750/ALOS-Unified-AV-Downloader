@@ -13,7 +13,10 @@ JableTV.csv
 main.spec
 __pycache__/
 .pytest_cache/
+*.egg-info/
+.venv/
 .Jable_smalltool/
+.alos-watch/
 
 # local maintenance guide (machine-specific paths — auto-loads locally, don't publish)
 CLAUDE.md

@@ -1,6 +1,6 @@
 import re
 
-import subtitle_domain as domain
+from alos_downloader.subtitles import domain
 
 
 def test_versions_and_authored_phrase_inventory_are_explicit():

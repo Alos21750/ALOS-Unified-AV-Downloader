@@ -1,8 +1,8 @@
 import concurrent.futures
 
-import M3U8Sites
-import config
-import M3U8Sites.M3U8Crawler as crawler_mod
+from alos_downloader import sites as M3U8Sites
+from alos_downloader.core import config
+from alos_downloader.sites import base as crawler_mod
 
 
 class _DummyCrawler(crawler_mod.M3U8Crawler):

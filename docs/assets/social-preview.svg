@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img" aria-labelledby="title description">
+  <title id="title">ALOS Unified AV Downloader</title>
+  <desc id="description">Interactive browsing, unattended automation, Docker and local AI subtitles for JableTV, MissAV, SupJav and Hanime1.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#09090c"/>
+      <stop offset="0.58" stop-color="#111116"/>
+      <stop offset="1" stop-color="#1a1015"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.82" cy="0.2" r="0.7">
+      <stop offset="0" stop-color="#ff5263" stop-opacity="0.24"/>
+      <stop offset="1" stop-color="#ff5263" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="14" stdDeviation="18" flood-color="#000" flood-opacity="0.34"/>
+    </filter>
+  </defs>
+
+  <rect width="1280" height="640" fill="url(#bg)"/>
+  <rect width="1280" height="640" fill="url(#glow)"/>
+  <path d="M0 518 C280 454 454 620 745 540 C958 482 1080 412 1280 456 L1280 640 L0 640Z" fill="#ff5263" opacity="0.055"/>
+
+  <g transform="translate(76 68)">
+    <rect width="74" height="74" rx="18" fill="#ff5263"/>
+    <path d="M20 51 L37 18 L54 51 M27 39 H47" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="94" y="30" fill="#ff6474" font-family="Segoe UI, Arial, sans-serif" font-size="17" font-weight="700" letter-spacing="3">ALOS</text>
+    <text x="94" y="65" fill="#f7f7f8" font-family="Segoe UI, Arial, sans-serif" font-size="28" font-weight="650">Unified AV Downloader</text>
+  </g>
+
+  <g transform="translate(76 190)">
+    <text x="0" y="0" fill="#ffffff" font-family="Segoe UI, Arial, sans-serif" font-size="57" font-weight="760">Find it. Watch for it.</text>
+    <text x="0" y="70" fill="#ffffff" font-family="Segoe UI, Arial, sans-serif" font-size="57" font-weight="760">Download it automatically.</text>
+    <text x="0" y="126" fill="#b8b8c2" font-family="Segoe UI, Arial, sans-serif" font-size="23">Interactive browsing · unattended new-release automation · local AI subtitles</text>
+  </g>
+
+  <g transform="translate(76 374)" font-family="Segoe UI, Arial, sans-serif">
+    <g filter="url(#shadow)">
+      <rect width="320" height="116" rx="18" fill="#17171d" stroke="#34343e"/>
+      <circle cx="46" cy="44" r="18" fill="#ff5263"/>
+      <path d="M40 44 L45 49 L54 38" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="76" y="41" fill="#fff" font-size="22" font-weight="700">ALOS Browse</text>
+      <text x="76" y="68" fill="#aaaab4" font-size="16">Search, select and queue</text>
+      <text x="28" y="96" fill="#ff7a87" font-size="14" font-weight="650">WINDOWS · INTERACTIVE</text>
+    </g>
+    <g transform="translate(338)" filter="url(#shadow)">
+      <rect width="320" height="116" rx="18" fill="#17171d" stroke="#34343e"/>
+      <circle cx="46" cy="44" r="18" fill="#ff5263"/>
+      <path d="M46 33 V45 L55 51" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round"/>
+      <text x="76" y="41" fill="#fff" font-size="22" font-weight="700">ALOS Watch</text>
+      <text x="76" y="68" fill="#aaaab4" font-size="16">Schedule once, run unattended</text>
+      <text x="28" y="96" fill="#ff7a87" font-size="14" font-weight="650">WINDOWS · AUTOMATION</text>
+    </g>
+    <g transform="translate(676)" filter="url(#shadow)">
+      <rect width="320" height="116" rx="18" fill="#17171d" stroke="#34343e"/>
+      <circle cx="46" cy="44" r="18" fill="#ff5263"/>
+      <path d="M37 38 L45 44 L37 50 M49 50 H57" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="76" y="41" fill="#fff" font-size="22" font-weight="700">ALOS Headless</text>
+      <text x="76" y="68" fill="#aaaab4" font-size="16">Docker, NAS and CLI</text>
+      <text x="28" y="96" fill="#ff7a87" font-size="14" font-weight="650">AMD64 · ARM64</text>
+    </g>
+  </g>
+
+  <g transform="translate(76 552)" font-family="Segoe UI, Arial, sans-serif">
+    <text x="0" y="24" fill="#8f8f99" font-size="17">JableTV</text>
+    <circle cx="82" cy="19" r="3" fill="#ff5263"/>
+    <text x="98" y="24" fill="#8f8f99" font-size="17">MissAV</text>
+    <circle cx="167" cy="19" r="3" fill="#ff5263"/>
+    <text x="183" y="24" fill="#8f8f99" font-size="17">SupJav</text>
+    <circle cx="250" cy="19" r="3" fill="#ff5263"/>
+    <text x="266" y="24" fill="#8f8f99" font-size="17">Hanime1</text>
+    <text x="996" y="24" text-anchor="end" fill="#f2f2f4" font-size="17" font-weight="650">github.com/Alos21750</text>
+  </g>
+</svg>

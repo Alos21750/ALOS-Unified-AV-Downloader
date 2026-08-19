@@ -16,7 +16,7 @@ _stub('cloudscraper')
 _stub('customtkinter')
 
 from Crypto.Cipher import AES
-from M3U8Sites.M3U8Crawler import M3U8Crawler
+from alos_downloader.sites.base import M3U8Crawler
 
 
 def test_seg_savename_unique_by_index():

@@ -2,59 +2,62 @@
   <a href="./README.md">繁體中文</a> · <a href="./README.zh-CN.md">简体中文</a> · <a href="./README.en.md">English</a> · <strong>日本語</strong>
 </p>
 
-<h1 align="center">JableTV Downloader</h1>
+<h1 align="center">ALOS Unified AV Downloader</h1>
 
 <p align="center">
   JableTV、MissAV、SupJav、Hanime1 に対応したデスクトップダウンローダー兼自動監視ツールです。<strong>AI 字幕生成</strong>を内蔵しています。<br />
   <strong>動画のダウンロード後に AI 字幕を自動追加：</strong>日本語音声をローカルで認識し、日本語・英語・繁体字中国語の SRT を出力できます。<br />
-  動画を閲覧して選ぶ場合は <strong>Modern</strong>、選択したカテゴリの新着を継続的に追跡する場合は <strong>SmallTool</strong> を使用してください。
+  動画を閲覧して選ぶ場合は <strong>ALOS Browse</strong>、選択したカテゴリの新着を継続的に追跡する場合は <strong>ALOS Watch</strong> を使用してください。<br />
+  <strong>最大の特長は無人自動運転です：</strong>カテゴリとスケジュールを一度設定すれば、新着の検出、重複排除、ダウンロード、字幕生成まで自動化できます。
 </p>
 
 <p align="center">
-  <a href="https://github.com/Alos21750/JableTV-MissAV-Downloader-GUI-2026/releases/latest"><img alt="最新リリース" src="https://img.shields.io/github/v/release/Alos21750/JableTV-MissAV-Downloader-GUI-2026?style=flat-square&label=release&color=ff5263" /></a>
-  <a href="https://github.com/Alos21750/JableTV-MissAV-Downloader-GUI-2026/releases"><img alt="総ダウンロード数" src="https://img.shields.io/github/downloads/Alos21750/JableTV-MissAV-Downloader-GUI-2026/total?style=flat-square&label=downloads&color=2ea44f" /></a>
-  <a href="https://github.com/Alos21750/JableTV-MissAV-Downloader-GUI-2026"><img alt="GitHub Stars" src="https://img.shields.io/github/stars/Alos21750/JableTV-MissAV-Downloader-GUI-2026?style=flat-square&logo=github&color=f5b942" /></a>
-  <a href="./LICENSE"><img alt="Apache 2.0 ライセンス" src="https://img.shields.io/github/license/Alos21750/JableTV-MissAV-Downloader-GUI-2026?style=flat-square" /></a>
-  <a href="https://github.com/Alos21750/JableTV-MissAV-Downloader-GUI-2026/pkgs/container/jabletv"><img alt="Docker amd64 と arm64" src="https://img.shields.io/badge/Docker-amd64%20%7C%20arm64-2496ed?style=flat-square&logo=docker&logoColor=white" /></a>
+  <a href="https://github.com/Alos21750/ALOS-Unified-AV-Downloader/releases/latest"><img alt="最新リリース" src="https://img.shields.io/github/v/release/Alos21750/ALOS-Unified-AV-Downloader?style=flat-square&label=release&color=ff5263" /></a>
+  <a href="https://github.com/Alos21750/ALOS-Unified-AV-Downloader/releases"><img alt="総ダウンロード数" src="https://img.shields.io/github/downloads/Alos21750/ALOS-Unified-AV-Downloader/total?style=flat-square&label=downloads&color=2ea44f" /></a>
+  <a href="https://github.com/Alos21750/ALOS-Unified-AV-Downloader"><img alt="GitHub Stars" src="https://img.shields.io/github/stars/Alos21750/ALOS-Unified-AV-Downloader?style=flat-square&logo=github&color=f5b942" /></a>
+  <a href="./LICENSE"><img alt="Apache 2.0 ライセンス" src="https://img.shields.io/github/license/Alos21750/ALOS-Unified-AV-Downloader?style=flat-square" /></a>
+  <a href="https://github.com/Alos21750/ALOS-Unified-AV-Downloader/pkgs/container/alos-unified-av-downloader"><img alt="Docker amd64 と arm64" src="https://img.shields.io/badge/Docker-amd64%20%7C%20arm64-2496ed?style=flat-square&logo=docker&logoColor=white" /></a>
 </p>
 
 <p align="center">
-  <strong><a href="https://github.com/Alos21750/JableTV-MissAV-Downloader-GUI-2026/releases/latest/download/JableTV_Modern.exe">Modern をダウンロード</a></strong>
+  <strong><a href="https://github.com/Alos21750/ALOS-Unified-AV-Downloader/releases/latest/download/ALOS_Browse.exe">ALOS Browse をダウンロード</a></strong>
   ·
-  <strong><a href="https://github.com/Alos21750/JableTV-MissAV-Downloader-GUI-2026/releases/latest/download/Jable_smalltool.exe">SmallTool をダウンロード</a></strong>
+  <strong><a href="https://github.com/Alos21750/ALOS-Unified-AV-Downloader/releases/latest/download/ALOS_Watch.exe">ALOS Watch をダウンロード</a></strong>
   ·
-  <a href="https://github.com/Alos21750/JableTV-MissAV-Downloader-GUI-2026/releases/latest">SmallTool portable ZIP（v2.5.38 以降）</a>
+  <a href="https://github.com/Alos21750/ALOS-Unified-AV-Downloader/releases/latest">ALOS Watch portable ZIP（v3.0.0 以降）</a>
   ·
-  <a href="https://github.com/Alos21750/JableTV-MissAV-Downloader-GUI-2026/releases/latest">最新リリースを表示</a>
+  <a href="https://github.com/Alos21750/ALOS-Unified-AV-Downloader/releases/latest">最新リリースを表示</a>
 </p>
 
 > [!TIP]
-> **既定では完全ローカルで動作し、API Key もアップロードも不要です。** Modern と SmallTool は、動画を変更せずに、プレーヤーで切り替え可能な `.ja.srt`、`.en.srt`、`.zh-TW.srt` をダウンロード後に作成できます。必要に応じて一般的な LLM API も設定できます。クラウドモードでメディア由来の情報として送信されるのは認識済み字幕テキストのみで、ほかに必要な API 認証情報と通常の接続メタデータが送信されます。動画や音声は送信されません。
+> **既定では完全ローカルで動作し、API Key もアップロードも不要です。** ALOS Browse と ALOS Watch は、動画を変更せずに、プレーヤーで切り替え可能な `.ja.srt`、`.en.srt`、`.zh-TW.srt` をダウンロード後に作成できます。必要に応じて一般的な LLM API も設定できます。クラウドモードでメディア由来の情報として送信されるのは認識済み字幕テキストのみで、ほかに必要な API 認証情報と通常の接続メタデータが送信されます。動画や音声は送信されません。
 
 <p align="center">
-  <img src="./img/readme_modern.png" width="100%" alt="JableTV、MissAV、SupJav の閲覧タブを表示する JableTV Downloader Modern のダーク画面" />
+  <img src="./docs/assets/alos-browse.png" width="100%" alt="JableTV、MissAV、SupJav の閲覧タブを表示する ALOS Unified AV Downloader ALOS Browse のダーク画面" />
 </p>
 
-## 用途に合うツールを選ぶ
+## 3 つのワークフロー、1 つのダウンロードコア
 
 | やりたいこと | 推奨ツール | 操作方法 |
 |---|---|---|
-| 閲覧・検索して動画を個別に選ぶ | **JableTV_Modern.exe** | カードを閲覧し、複数選択してキューに追加、またはすぐにダウンロード |
-| 選択したカテゴリの新着を追跡する | **Jable_smalltool.exe** | サイト、カテゴリ、基準日、バージョン優先度を選んで監視を開始 |
-| Defender が one-file 版 SmallTool を検出する | **Jable_smalltool_portable.zip** | ハッシュと検出内容を確認してから、一時自己展開を行わない代替版を評価してください。代替版も検出された場合は使用を中止して報告してください |
+| 閲覧・検索して動画を個別に選ぶ | **ALOS_Browse.exe** | カードを閲覧し、複数選択してキューに追加、またはすぐにダウンロード |
+| 無人で新着を自動追跡する | **ALOS_Watch.exe** | サイト、カテゴリ、基準日、バージョン優先度、スケジュールを設定し、検出・重複排除・ダウンロード・字幕生成を自動実行 |
+| Defender が one-file 版 ALOS Watch を検出する | **ALOS_Watch_portable.zip** | ハッシュと検出内容を確認してから、一時自己展開を行わない代替版を評価してください。代替版も検出された場合は使用を中止して報告してください |
 | NAS／サーバーで画面なしに実行する | **Docker / CLI** | 1 件以上の URL を渡すか、`urls.txt` をマウント |
 
-迷った場合は **Modern** から始めてください。どちらの Windows 実行ファイルも Python のインストールは不要で、Release 版には ffmpeg が含まれています。
+迷った場合は **ALOS Browse** から始めてください。どちらの Windows 実行ファイルも Python のインストールは不要で、Release 版には ffmpeg が含まれています。
+
+詳細：[ALOS Browse](./docs/alos-browse.md) · [ALOS Watch の無人自動運転](./docs/alos-watch.md) · [AI 字幕](./docs/ai-subtitles.md) · [Docker / CLI](./docs/docker-cli.md) · [v3 移行](./docs/migration-v3.md)
 
 ## Windows：30 秒で開始
 
-1. [JableTV_Modern.exe](https://github.com/Alos21750/JableTV-MissAV-Downloader-GUI-2026/releases/latest/download/JableTV_Modern.exe) または [Jable_smalltool.exe](https://github.com/Alos21750/JableTV-MissAV-Downloader-GUI-2026/releases/latest/download/Jable_smalltool.exe) をダウンロードします。
+1. [ALOS_Browse.exe](https://github.com/Alos21750/ALOS-Unified-AV-Downloader/releases/latest/download/ALOS_Browse.exe) または [ALOS_Watch.exe](https://github.com/Alos21750/ALOS-Unified-AV-Downloader/releases/latest/download/ALOS_Watch.exe) をダウンロードします。
 2. 書き込み可能なフォルダーへ置き、ダブルクリックして実行します。
 3. 初回起動時に言語を選択します。以後は日本語、English、繁體中文、简体中文、およびライト／ダークテーマをいつでも切り替えられます。
 
 SmartScreen の評価警告と Defender Antivirus の隔離は別の事象です。まず [Windows のダウンロードとセキュリティ検証](./WINDOWS_SECURITY.md)を読み、`SHA256SUMS.txt` と GitHub provenance を確認してください。Defender が脅威名を表示した場合、保護設定を安易に弱めないでください。
 
-## Modern：閲覧・選択・ダウンロード
+## ALOS Browse：閲覧・選択・ダウンロード
 
 1. 「閲覧」で JableTV、MissAV、SupJav、Hanime1 のいずれかを選び、カテゴリを開くか検索します。
 2. 複数の動画を選択してキューに追加するか、そのままダウンロードします。
@@ -72,10 +75,10 @@ SmartScreen の評価警告と Defender Antivirus の隔離は別の事象です
 | Proxy | 独自の HTTP、HTTPS、SOCKS4、SOCKS5、または Windows で有効な手動 ProxyServer を使用できます。Windows のグローバル設定は変更しません |
 | 更新 | バックグラウンドで GitHub Release を確認し、新版のインストール前にユーザーへ確認します |
 
-## SmallTool：カテゴリの新着を自動監視
+## ALOS Watch：カテゴリの新着を自動監視
 
 <p align="center">
-  <img src="./img/readme_smalltool.png" width="100%" alt="MissAV のカテゴリ、日付、画質、バージョン優先度、AI 字幕を表示する Jable SmallTool のダーク画面" />
+  <img src="./docs/assets/alos-watch.png" width="100%" alt="MissAV のカテゴリ、日付、画質、バージョン優先度、AI 字幕を表示する Jable ALOS Watch のダーク画面" />
 </p>
 
 1. 保存先を選択します。未指定の場合、実行ファイルの隣に `tmp` が自動作成されます。
@@ -91,9 +94,9 @@ SmartScreen の評価警告と Defender Antivirus の隔離は別の事象です
 | SupJav | 10 | フィード／ランキング、主要カテゴリ |
 | Hanime1 | 24 | 新着／アップロード／ランキング、9 種類の動画ジャンル、中国語字幕などの特徴タグ |
 
-SmallTool は 1–168 時間ごと、またはこのコンピューターのローカル時刻で毎日指定時刻に確認できます。既存設定の既定値は引き続き 24 時間です。「今すぐ確認」は重複スケジュールを作成せずに 1 回だけ直ちに実行します。同じ識別番号がカテゴリやサイトをまたいで重複した場合、設定したバージョン優先度に合う候補を残します。番号を確実に識別できない場合は完全に同一の URL だけを重複排除し、推測による統合は行いません。
+ALOS Watch は 1–168 時間ごと、またはこのコンピューターのローカル時刻で毎日指定時刻に確認できます。既存設定の既定値は引き続き 24 時間です。「今すぐ確認」は重複スケジュールを作成せずに 1 回だけ直ちに実行します。同じ識別番号がカテゴリやサイトをまたいで重複した場合、設定したバージョン優先度に合う候補を残します。番号を確実に識別できない場合は完全に同一の URL だけを重複排除し、推測による統合は行いません。
 
-ダウンロード履歴は、書き込み可能な場合は実行ファイルの隣の `.Jable_smalltool` に保存されます。書き込めない場合は `%APPDATA%\JableTV Downloader\smalltool` を使用します。
+ダウンロード履歴は、書き込み可能な場合は実行ファイルの隣の `.alos-watch` に保存されます。書き込めない場合は `%APPDATA%\ALOS Unified AV Downloader\watch` を使用します。
 
 ## AI 字幕：ダウンロード後に日／英／繁体字中国語 SRT を自動追加
 
@@ -106,12 +109,12 @@ SmallTool は 1–168 時間ごと、またはこのコンピューターのロ�
 - オプションの API 拡張は **OpenAI、Anthropic、Gemini**、および **OpenAI-compatible** API に対応しています。互換モードでは DeepSeek、OpenRouter、Groq、Ollama、LiteLLM などへ接続できます。選択したサービスへ送信されるメディア由来の情報は認識済み字幕テキストだけです。必要な API 認証情報と通常の接続メタデータも送信されますが、動画と音声は常にローカルに残ります。
 - ユーザーが入力した API Key は、現在サインインしている Windows アカウント用の Windows DPAPI で暗号化して保存されます。プロジェクトや EXE に API Key は含まれません。料金、使用量上限、データ処理、利用規約は選択したプロバイダーによって異なるため、使用前に最新条件を確認してください。
 - ローカル翻訳では各 cue を元のタイムスタンプに固定し、メンテナーが作成・確認した 900 以上の成人向け文脈、安全／同意、撮影時のプライバシー、現場指示、日常表現に加え、保守的な台湾表現の補正とバージョン管理された exact-match 翻訳メモリを使用します。「止めて」と「止めないで」のような意味を反転させる恐れがある曖昧一致は使用しません。
-- Modern は動画ダウンロードと字幕処理を別々のキューで管理するため、バックグラウンド字幕処理は 1–32 個の動画ダウンロード枠を占有しません。
+- ALOS Browse は動画ダウンロードと字幕処理を別々のキューで管理するため、バックグラウンド字幕処理は 1–32 個の動画ダウンロード枠を占有しません。
 - 所要時間は CPU、動画の長さ、実際の発話量、選択した翻訳サービスによって異なります。3 言語モードは 1 回のローカル音声認識を共有し、ローカルモードでは中間翻訳結果も再利用して重複推論を避けます。
 
 ## 対応範囲
 
-| サイト | Modern の閲覧／検索／ダウンロード | SmallTool のカテゴリ監視 | Docker／CLI の URL ダウンロード |
+| サイト | ALOS Browse の閲覧／検索／ダウンロード | ALOS Watch のカテゴリ監視 | Docker／CLI の URL ダウンロード |
 |---|:---:|:---:|:---:|
 | JableTV | ✓ | ✓ | ✓ |
 | MissAV | ✓ | ✓ | ✓ |
@@ -127,18 +130,19 @@ Hanime1 は公式 `watch?v=` URL、サイト内検索、ページ送り、並べ
 現在のコードには **Python 3.10+** と Tk が必要です。以前の README にあった Python 3.8+ という記載は、現在使用している構文には対応しません。
 
 ```bash
-git clone https://github.com/Alos21750/JableTV-MissAV-Downloader-GUI-2026.git
-cd JableTV-MissAV-Downloader-GUI-2026
+git clone https://github.com/Alos21750/ALOS-Unified-AV-Downloader.git
+cd ALOS-Unified-AV-Downloader
 python -m pip install -r requirements.txt
+python -m pip install -e .
 
 # フル GUI
-python main.py
+alos-browse
 
 # カテゴリ自動監視ツール
-python jable_smalltool.py
+alos-watch
 
 # 1 件の URL を GUI なしで、保存先と動画ごとの 3 ワーカーを指定して実行
-python main.py --nogui --url "https://jable.tv/videos/example/" --output "/path/to/downloads" --max-workers-per-video 3
+alos-browse --nogui --url "https://jable.tv/videos/example/" --output "/path/to/downloads" --max-workers-per-video 3
 ```
 
 `-o` は `--output` の短縮形です。省略すると `./download` に保存されます。`--max-workers-per-video` は 1–16 を受け付け、Proxy の負荷を下げる場合は小さくできます。
@@ -147,18 +151,18 @@ Linux に Tk がない場合は、システムのパッケージマネージャ�
 
 ## Docker / NAS
 
-公開イメージは `ghcr.io/alos21750/jabletv:latest` です。GitHub Actions が amd64 と arm64 の両方をビルドします。
+公開イメージは `ghcr.io/alos21750/alos-unified-av-downloader:latest` です。GitHub Actions が amd64 と arm64 の両方をビルドします。
 
 ```bash
 # 1 件の URL をダウンロードし、ホストのフォルダーを /downloads にマウント
 docker run --rm -v "/path/to/downloads:/downloads" \
-  ghcr.io/alos21750/jabletv:latest "https://jable.tv/videos/example/"
+  ghcr.io/alos21750/alos-unified-av-downloader:latest "https://jable.tv/videos/example/"
 
 # docker compose：URL を直接渡す
-docker compose run --rm jabletv "https://jable.tv/videos/example/"
+docker compose run --rm alos "https://jable.tv/videos/example/"
 
 # または ./downloads/urls.txt に 1 行 1 URL で記載
-docker compose run --rm jabletv
+docker compose run --rm alos
 ```
 
 利用可能な環境変数：
@@ -171,23 +175,23 @@ docker compose run --rm jabletv
 | `URLS_FILE` | URL リスト。既定は `/downloads/urls.txt` |
 | `DOWNLOAD_DIR` | コンテナ内の保存先。既定は `/downloads` |
 
-Docker は GUI なしで処理完了後に終了するダウンロードジョブです。Modern または SmallTool の GUI は含まれません。
+Docker は GUI なしで処理完了後に終了するダウンロードジョブです。ALOS Browse または ALOS Watch の GUI は含まれません。
 
 ## トラブルシューティング
 
-[GitHub Issue](https://github.com/Alos21750/JableTV-MissAV-Downloader-GUI-2026/issues/new) を作成するときは、次の情報を含めてください：
+[GitHub Issue](https://github.com/Alos21750/ALOS-Unified-AV-Downloader/issues/new) を作成するときは、次の情報を含めてください：
 
 - App のバージョン、使用したツール、OS。
 - サイトと再現可能な URL、期待した結果と実際の結果。
 - クラッシュした場合は、実行ファイルの隣にある `crash_log.txt` または `crash_native.log`。
 - Cookie、Proxy の認証情報、Token、その他の秘密情報はアップロードしないでください。
 
-Proxy が必要な場合は、Modern の「設定」または SmallTool 上部で、独自 Proxy、Windows システム Proxy、または無効を選択できます。2 つの GUI はこの設定を共有し、本アプリだけに適用します。Windows モードは現在、有効な手動 ProxyServer に対応しています。PAC 設定 URL は表示しますが実行せず、WPAD 自動検出にはまだ対応していません。
+Proxy が必要な場合は、ALOS Browse の「設定」または ALOS Watch 上部で、独自 Proxy、Windows システム Proxy、または無効を選択できます。2 つの GUI はこの設定を共有し、本アプリだけに適用します。Windows モードは現在、有効な手動 ProxyServer に対応しています。PAC 設定 URL は表示しますが実行せず、WPAD 自動検出にはまだ対応していません。
 
 ## Stars とプロジェクト活動
 
 <p align="center">
-  <img src="./img/star-history.svg" width="100%" alt="JableTV Downloader の検証済み GitHub Star 履歴" />
+  <img src="./docs/assets/star-history.svg" width="100%" alt="ALOS Unified AV Downloader の検証済み GitHub Star 履歴" />
 </p>
 
 グラフは本リポジトリの GitHub Actions によって生成されます。読み取り専用の repository token を使用し、現在の各 stargazer の `starredAt` 時刻だけを取得します。ユーザー名は要求も出力もしません。データまたはグラフ形式が変化した場合だけファイルを更新します。そのため、この曲線は「現在もリポジトリに Star を付けているアカウント」の追加日を示し、Star を解除したアカウントは含まれません。
@@ -203,6 +207,6 @@ GitHub は 2026 年 7 月に stargazer リストへのアクセスを制限し�
 
 コードは [Apache License 2.0](./LICENSE) で提供されます。本ツールは合法的な個人利用または研究目的に限って使用してください。所在地の法律、サイトの規約、コンテンツの権利を守り、アクセス権限のあるコンテンツだけをダウンロードしてください。
 
-バージョン変更と解決済みの問題は [Releases](https://github.com/Alos21750/JableTV-MissAV-Downloader-GUI-2026/releases) を参照してください。
+バージョン変更と解決済みの問題は [Releases](https://github.com/Alos21750/ALOS-Unified-AV-Downloader/releases) を参照してください。
 
 <p align="center"><a href="https://github.com/Alos21750">ALOS</a> が開発・保守しています。</p>

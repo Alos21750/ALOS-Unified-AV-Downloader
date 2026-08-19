@@ -18,7 +18,7 @@ def _stub(name, factory=None):
 _stub('cloudscraper')
 _stub('customtkinter')
 
-from M3U8Sites.SiteMissAV import SiteMissAV, MissAVBrowser, _unpack_js_eval
+from alos_downloader.sites.missav import SiteMissAV, MissAVBrowser, _unpack_js_eval
 
 
 def test_validate_accepts_video_pages():
@@ -82,6 +82,7 @@ def test_listing_fetch_rejects_404_grid_page(monkeypatch):
 
     monkeypatch.setattr(MissAVBrowser, '_get_scraper',
                         classmethod(lambda cls: object()))
-    monkeypatch.setattr('M3U8Sites.SiteMissAV.fetch_with_mirrors', fake_fetch)
+    monkeypatch.setattr(
+        'alos_downloader.sites.missav.fetch_with_mirrors', fake_fetch)
 
     assert MissAVBrowser.fetch_page(response.url) == []

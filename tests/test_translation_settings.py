@@ -3,7 +3,7 @@ import os
 
 import pytest
 
-import translation_settings as settings
+from alos_downloader.subtitles import settings
 
 
 @pytest.fixture

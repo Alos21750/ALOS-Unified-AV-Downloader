@@ -20,7 +20,10 @@ import urllib.request
 
 
 GRAPHQL_URL = 'https://api.github.com/graphql'
-OUTPUT_PATH = Path(__file__).resolve().parents[1] / 'img' / 'star-history.svg'
+OUTPUT_PATH = (
+    Path(__file__).resolve().parents[1] / 'docs' / 'assets' /
+    'star-history.svg'
+)
 RENDER_VERSION = '2'
 
 QUERY = '''
@@ -49,7 +52,7 @@ def graphql(token: str, variables: dict) -> dict:
             'Accept': 'application/vnd.github+json',
             'Authorization': f'Bearer {token}',
             'Content-Type': 'application/json',
-            'User-Agent': 'JableTV-star-history-workflow',
+            'User-Agent': 'ALOS-Unified-AV-Downloader-star-history',
         },
         method='POST',
     )

@@ -5,9 +5,9 @@ on:
   push:
     branches: [master]
     paths:
-      - "*.py"
-      - "M3U8Sites/**"
-      - "build_tmp/**"
+      - "src/**"
+      - "pyproject.toml"
+      - "packaging/**"
       - "THIRD_PARTY_NOTICES.md"
       - "README.md"
       - "README.en.md"
@@ -126,7 +126,7 @@ jobs:
             Move-Item -LiteralPath $partial -Destination $Destination
           }
 
-          $root = Join-Path $env:RUNNER_TEMP "jable-reazonspeech-asr-v1"
+          $root = Join-Path $env:RUNNER_TEMP "alos-reazonspeech-asr-v1"
           New-Item -ItemType Directory -Path $root | Out-Null
           $archive = Join-Path $root `
             "sherpa-onnx-v1.13.4-win-x64-shared-MT-MinSizeRel-no-tts.tar.bz2"
@@ -197,7 +197,7 @@ jobs:
 
           New-Item -ItemType Directory -Force -Path dist | Out-Null
           $pack = Join-Path (Resolve-Path "dist") `
-            "Jable_reazonspeech_asr_v1.zip"
+            "ALOS_reazonspeech_asr_v1.zip"
           $resultText = & python scripts/build_reazonspeech_asr_pack.py `
             --runtime-dir $runtimeDir `
             --model-dir $modelDir `
@@ -223,21 +223,54 @@ jobs:
             186186197 `
             "cf55e5485e14715beee6e0b12ca2b0998ad73ec755513e80138fa5161693c700"
 
-      - name: Build Modern and SmallTool
+      - name: Build ALOS Browse and ALOS Watch
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path dist, build | Out-Null
-          Push-Location build_tmp
-          python -m PyInstaller --noconfirm --clean --distpath ..\dist --workpath ..\build JableTV_Modern.spec
-          python -m PyInstaller --noconfirm --clean --distpath ..\dist --workpath ..\build\smalltool-onefile Jable_smalltool.spec
-          python -m PyInstaller --noconfirm --clean --distpath ..\dist --workpath ..\build\smalltool-portable Jable_smalltool.spec -- --portable
+          Push-Location packaging\windows
+          python -m PyInstaller --noconfirm --clean --distpath ..\..\dist --workpath ..\..\build ALOS_Browse.spec
+          python -m PyInstaller --noconfirm --clean --distpath ..\..\dist --workpath ..\..\build\watch-onefile ALOS_Watch.spec
+          python -m PyInstaller --noconfirm --clean --distpath ..\..\dist --workpath ..\..\build\watch-portable ALOS_Watch.spec -- --portable
           Pop-Location
           Compress-Archive `
-            -Path "dist\Jable_smalltool_portable" `
-            -DestinationPath "dist\Jable_smalltool_portable.zip" `
+            -Path "dist\ALOS_Watch_portable" `
+            -DestinationPath "dist\ALOS_Watch_portable.zip" `
             -CompressionLevel Optimal
 
+          # v2 clients resolve these exact names. Each compatibility asset is
+          # a byte-for-byte alias of its canonical v3 counterpart.
+          Copy-Item -LiteralPath "dist\ALOS_Browse.exe" `
+            -Destination "dist\JableTV_Modern.exe"
+          Copy-Item -LiteralPath "dist\ALOS_Watch.exe" `
+            -Destination "dist\Jable_smalltool.exe"
+          Copy-Item -LiteralPath "dist\ALOS_Watch_portable.zip" `
+            -Destination "dist\Jable_smalltool_portable.zip"
+          Copy-Item -LiteralPath "dist\ALOS_reazonspeech_asr_v1.zip" `
+            -Destination "dist\Jable_reazonspeech_asr_v1.zip"
+
+          $aliasPairs = @(
+            @("ALOS_Browse.exe", "JableTV_Modern.exe"),
+            @("ALOS_Watch.exe", "Jable_smalltool.exe"),
+            @("ALOS_Watch_portable.zip", "Jable_smalltool_portable.zip"),
+            @("ALOS_reazonspeech_asr_v1.zip", "Jable_reazonspeech_asr_v1.zip")
+          )
+          foreach ($pair in $aliasPairs) {
+            $canonicalHash = (
+              Get-FileHash -Algorithm SHA256 -LiteralPath "dist\$($pair[0])"
+            ).Hash
+            $aliasHash = (
+              Get-FileHash -Algorithm SHA256 -LiteralPath "dist\$($pair[1])"
+            ).Hash
+            if ($canonicalHash -ne $aliasHash) {
+              throw "Compatibility alias is not byte-identical: $($pair[1])"
+            }
+          }
+
           $assetNames = @(
+            "ALOS_Browse.exe",
+            "ALOS_Watch.exe",
+            "ALOS_Watch_portable.zip",
+            "ALOS_reazonspeech_asr_v1.zip",
             "JableTV_Modern.exe",
             "Jable_smalltool.exe",
             "Jable_smalltool_portable.zip",
@@ -256,11 +289,13 @@ jobs:
       - name: Verify executable metadata
         shell: pwsh
         run: |
-          $expected = "2.5.43.0"
+          $expected = "3.0.0.0"
           $files = @(
+            "dist\ALOS_Browse.exe",
+            "dist\ALOS_Watch.exe",
+            "dist\ALOS_Watch_portable\ALOS_Watch.exe",
             "dist\JableTV_Modern.exe",
-            "dist\Jable_smalltool.exe",
-            "dist\Jable_smalltool_portable\Jable_smalltool.exe"
+            "dist\Jable_smalltool.exe"
           )
           foreach ($file in $files) {
             if (!(Test-Path -LiteralPath $file)) { throw "Missing $file" }
@@ -269,6 +304,8 @@ jobs:
             Write-Host "$file $version $((Get-Item -LiteralPath $file).Length) bytes"
           }
           foreach ($file in @(
+            "dist\ALOS_Watch_portable.zip",
+            "dist\ALOS_reazonspeech_asr_v1.zip",
             "dist\Jable_smalltool_portable.zip",
             "dist\Jable_reazonspeech_asr_v1.zip",
             "dist\SHA256SUMS.txt"
@@ -280,6 +317,10 @@ jobs:
         uses: actions/attest@v4
         with:
           subject-path: |
+            dist/ALOS_Browse.exe
+            dist/ALOS_Watch.exe
+            dist/ALOS_Watch_portable.zip
+            dist/ALOS_reazonspeech_asr_v1.zip
             dist/JableTV_Modern.exe
             dist/Jable_smalltool.exe
             dist/Jable_smalltool_portable.zip
@@ -289,8 +330,12 @@ jobs:
       - name: Upload Windows executables
         uses: actions/upload-artifact@v4
         with:
-          name: jabletv-windows-${{ github.sha }}
+          name: alos-unified-windows-${{ github.sha }}
           path: |
+            dist/ALOS_Browse.exe
+            dist/ALOS_Watch.exe
+            dist/ALOS_Watch_portable.zip
+            dist/ALOS_reazonspeech_asr_v1.zip
             dist/JableTV_Modern.exe
             dist/Jable_smalltool.exe
             dist/Jable_smalltool_portable.zip

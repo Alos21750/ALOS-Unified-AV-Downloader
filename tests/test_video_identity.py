@@ -2,7 +2,7 @@ import itertools
 
 import pytest
 
-from video_identity import (
+from alos_downloader.core.video_identity import (
     DEFAULT_VERSION_PREFERENCE,
     MAX_SOURCE_SUBTITLE_EVIDENCE_TEXT,
     TRUSTED_CHINESE_SUBTITLE_EVIDENCE,

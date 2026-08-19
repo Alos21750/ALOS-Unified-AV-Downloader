@@ -10,10 +10,12 @@ from pathlib import Path
 
 import pytest
 
-import gui_modern
-import jable_smalltool
-import locales
-from subtitle_engine import SubtitleResult
+from alos_downloader.apps import browse as gui_modern
+from alos_downloader.apps import watch as jable_smalltool
+from alos_downloader import core, subtitles
+from alos_downloader.core import bootstrap
+from alos_downloader.i18n import locales
+from alos_downloader.subtitles.engine import SubtitleResult
 
 
 def _wait_until(predicate, timeout=2):
@@ -32,8 +34,14 @@ def test_smalltool_defers_subtitle_engine_until_download():
         node for node in tree.body
         if isinstance(node, (ast.Import, ast.ImportFrom))
         and (
-            getattr(node, 'module', None) == 'subtitle_engine'
-            or any(alias.name == 'subtitle_engine'
+            getattr(node, 'module', None) in {
+                'subtitle_engine',
+                'alos_downloader.subtitles.engine',
+            }
+            or any(alias.name in {
+                       'subtitle_engine',
+                       'alos_downloader.subtitles.engine',
+                   }
                    for alias in getattr(node, 'names', ()))
         )
     ]
@@ -41,26 +49,34 @@ def test_smalltool_defers_subtitle_engine_until_download():
 
 
 def test_both_frozen_entry_points_expose_explicit_translation_diagnostic():
-    root = Path(jable_smalltool.__file__).resolve().parent
-    for filename in ('main.py', 'jable_smalltool.py'):
-        source = (root / filename).read_text(encoding='utf-8')
-        assert 'JABLE_LOCAL_TRANSLATION_DIAGNOSTIC_OUTPUT' in source
-        assert 'run_local_translation_diagnostic' in source
-        assert (
-            'JABLE_LOCAL_TRANSLATION_SOAK_DIAGNOSTIC_OUTPUT'
-            in source)
-        assert (
-            'run_local_translation_worker_soak_diagnostic'
-            in source)
-        assert 'JABLE_LLM_TRANSLATION_DIAGNOSTIC_OUTPUT' in source
-        assert 'run_llm_translation_diagnostic' in source
+    entrypoint_root = (
+        Path(__file__).resolve().parents[1]
+        / 'src' / 'alos_downloader' / 'entrypoints'
+    )
+    bootstrap_source = Path(bootstrap.__file__).read_text(encoding='utf-8')
+    for prefix in ('ALOS', 'JABLE'):
+        assert f'{prefix}_LOCAL_TRANSLATION_DIAGNOSTIC_OUTPUT' in (
+            bootstrap_source)
+        assert f'{prefix}_LOCAL_TRANSLATION_SOAK_DIAGNOSTIC_OUTPUT' in (
+            bootstrap_source)
+        assert f'{prefix}_LLM_TRANSLATION_DIAGNOSTIC_OUTPUT' in (
+            bootstrap_source)
+    for filename in ('browse.py', 'watch.py'):
+        source = (entrypoint_root / filename).read_text(encoding='utf-8')
+        assert 'run_translation_diagnostic_if_requested' in source
+    assert 'run_local_translation_diagnostic' in bootstrap_source
+    assert 'run_local_translation_worker_soak_diagnostic' in bootstrap_source
+    assert 'run_llm_translation_diagnostic' in bootstrap_source
 
 
 def test_llm_diagnostic_exits_both_entry_points_before_gui_import(
         monkeypatch, tmp_path):
-    root = Path(jable_smalltool.__file__).resolve().parent
+    root = (
+        Path(__file__).resolve().parents[1]
+        / 'src' / 'alos_downloader' / 'entrypoints'
+    )
     calls = []
-    fake_engine = types.ModuleType('subtitle_engine')
+    fake_engine = types.ModuleType('alos_downloader.subtitles.engine')
 
     def fake_run(output):
         calls.append(output)
@@ -72,10 +88,14 @@ def test_llm_diagnostic_exits_both_entry_points_before_gui_import(
     fake_engine.run_local_translation_diagnostic = lambda _output: None
     fake_engine.run_local_translation_worker_soak_diagnostic = (
         lambda _output: None)
-    fake_crashlog = types.ModuleType('crashlog')
+    fake_crashlog = types.ModuleType('alos_downloader.core.crashlog')
     fake_crashlog.install = lambda: None
-    monkeypatch.setitem(sys.modules, 'subtitle_engine', fake_engine)
-    monkeypatch.setitem(sys.modules, 'crashlog', fake_crashlog)
+    monkeypatch.setitem(
+        sys.modules, 'alos_downloader.subtitles.engine', fake_engine)
+    monkeypatch.setitem(
+        sys.modules, 'alos_downloader.core.crashlog', fake_crashlog)
+    monkeypatch.setattr(subtitles, 'engine', fake_engine, raising=False)
+    monkeypatch.setattr(core, 'crashlog', fake_crashlog, raising=False)
     monkeypatch.delenv(
         'JABLE_LOCAL_TRANSLATION_DIAGNOSTIC_OUTPUT', raising=False)
     monkeypatch.delenv(
@@ -83,24 +103,28 @@ def test_llm_diagnostic_exits_both_entry_points_before_gui_import(
         raising=False)
 
     real_import = builtins.__import__
-    gui_roots = {
-        'args',
+    gui_prefixes = {
+        'alos_downloader.apps',
+        'alos_downloader.i18n',
+        'alos_downloader.legacy',
+        'alos_downloader.sites',
+        'alos_downloader.ui',
         'customtkinter',
-        'gui',
-        'gui_modern',
-        'M3U8Sites',
         'tkinter',
-        'translation_settings_ui',
     }
 
     def reject_gui_import(name, *args, **kwargs):
-        if str(name).split('.', 1)[0] in gui_roots:
+        module_name = str(name)
+        if any(
+            module_name == prefix or module_name.startswith(prefix + '.')
+            for prefix in gui_prefixes
+        ):
             raise AssertionError(
                 f'GUI/heavy module imported during diagnostic: {name}')
         return real_import(name, *args, **kwargs)
 
     monkeypatch.setattr(builtins, '__import__', reject_gui_import)
-    for filename in ('main.py', 'jable_smalltool.py'):
+    for filename in ('browse.py', 'watch.py'):
         output = str(tmp_path / f'{filename}.json')
         monkeypatch.setenv(
             'JABLE_LLM_TRANSLATION_DIAGNOSTIC_OUTPUT', output)

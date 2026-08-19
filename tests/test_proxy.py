@@ -3,8 +3,8 @@ import json
 import pytest
 import requests
 
-import config
-from M3U8Sites import M3U8Crawler as crawler
+from alos_downloader.core import config
+from alos_downloader.sites import base as crawler
 
 
 @pytest.mark.parametrize(
